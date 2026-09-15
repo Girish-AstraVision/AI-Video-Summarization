@@ -14,6 +14,14 @@ def get_upload_directory() -> Path:
     return uploads_dir
 
 
+def get_video_path_by_id(video_id: str) -> Path:
+    upload_dir = get_upload_directory()
+    matches = sorted(upload_dir.glob(f"{video_id}.*"))
+    if not matches:
+        raise FileNotFoundError(f"No uploaded video found for video_id '{video_id}'.")
+    return matches[0]
+
+
 def validate_video_extension(filename: str) -> str:
     if not filename:
         raise ValueError("No file name provided.")

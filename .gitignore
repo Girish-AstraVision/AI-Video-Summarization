@@ -159,8 +159,14 @@ env.bak/
 venv.bak/
 
 # Project runtime artifacts
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/outputs/*
+!backend/outputs/.gitkeep
 uploads/*
 !uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep
 
 # Spyder project settings
 .spyderproject
