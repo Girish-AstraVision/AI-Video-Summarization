@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.content_moderation import router as content_moderation_router
 from app.api.routes.health import router as health_router
+from app.api.routes.keyframes import router as keyframes_router
 from app.api.routes.preprocessing import router as preprocessing_router
 from app.api.routes.speech_to_text import router as speech_to_text_router
 from app.api.routes.videos import router as videos_router
@@ -30,6 +31,7 @@ app.include_router(preprocessing_router)
 app.include_router(visual_detection_router)
 app.include_router(speech_to_text_router)
 app.include_router(content_moderation_router)
+app.include_router(keyframes_router)
 
 
 @app.get("/")
