@@ -1,0 +1,121 @@
+import { API_BASE_URL } from '../config/env';
+import type { ApiHealthResponse, PreprocessingResult, UploadVideoResponse } from '../types/api';
+
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...((options.headers as Record<string, string> | undefined) ?? {}),
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
+async function parseUploadError(response: Response): Promise<string> {
+  const defaultMessage = 'The upload request failed. Please try again.';
+
+  if (response.status === 400) {
+    return 'The selected file is invalid. Please upload a supported video file.';
+  }
+
+  if (response.status === 413) {
+    return 'The uploaded file is too large for this frontend check. Please choose a video under 500 MB.';
+  }
+
+  if (response.status === 500) {
+    return 'The backend encountered a server error while processing the upload. Please try again.';
+  }
+
+  try {
+    const data = (await response.json()) as { detail?: unknown; message?: unknown };
+    const detail = data.detail ?? data.message;
+    if (typeof detail === 'string' && detail.trim().length > 0) {
+      return detail;
+    }
+  } catch {
+    // Ignore JSON parsing failure and fall back to a generic message.
+  }
+
+  return defaultMessage;
+}
+
+export async function uploadVideo(file: File): Promise<UploadVideoResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/videos/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseUploadError(response));
+    }
+
+    return (await response.json()) as UploadVideoResponse;
+  } catch (error) {
+    if (error instanceof Error) {
+      const message = error.message.trim();
+      if (message.length > 0) {
+        throw new Error(message);
+      }
+    }
+
+    throw new Error('The backend is unavailable or unreachable. Please check the server and try again.');
+  }
+}
+
+export async function preprocessVideo(videoId: string): Promise<PreprocessingResult> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/preprocess`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Video "${videoId}" was not found. Please upload it again.`);
+      }
+
+      if (response.status === 400) {
+        throw new Error('The preprocessing request is invalid for this video.');
+      }
+
+      if (response.status === 500) {
+        throw new Error('The backend encountered an error while preprocessing the video.');
+      }
+
+      throw new Error(`Preprocessing failed with status ${response.status}. Please try again.`);
+    }
+
+    return (await response.json()) as PreprocessingResult;
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('A network error occurred while trying to preprocess the video.');
+  }
+}
+
+export const api = {
+  getHealth: () => request<ApiHealthResponse>('/'),
+  get: <T>(endpoint: string) => request<T>(endpoint),
+  post: <T>(endpoint: string, body: unknown) =>
+    request<T>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+};
+
+export { API_BASE_URL };
