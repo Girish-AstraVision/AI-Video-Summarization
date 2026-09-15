@@ -153,9 +153,14 @@ activemq-data/
 .venv
 env/
 venv/
+backend/venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Project runtime artifacts
+uploads/*
+!uploads/.gitkeep
 
 # Spyder project settings
 .spyderproject
