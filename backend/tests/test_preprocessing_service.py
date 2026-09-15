@@ -189,6 +189,14 @@ def test_preprocess_video_extracts_frames_and_timestamps(monkeypatch: pytest.Mon
     assert frames_dir.exists()
     assert len(list(frames_dir.glob("*.jpg"))) == result["frame_count"]
 
+    metadata_path = Path(result["details"]["metadata_path"])
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["frame_details"]
+    assert all("frame_filename" in detail and "timestamp" in detail for detail in metadata["frame_details"])
+    assert [detail["frame_filename"] for detail in metadata["frame_details"]] == [
+        frame.name for frame in sorted(frames_dir.glob("*.jpg"))
+    ]
+
 
 def test_preprocess_video_creates_expected_output_structure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     uploads_dir, _ = configure_test_runtime(monkeypatch, tmp_path)

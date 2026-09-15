@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.health import router as health_router
 from app.api.routes.preprocessing import router as preprocessing_router
 from app.api.routes.videos import router as videos_router
+from app.api.routes.visual_detection import router as visual_detection_router
 from app.config import settings
 
 app = FastAPI(
@@ -24,6 +25,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(videos_router)
 app.include_router(preprocessing_router)
+app.include_router(visual_detection_router)
 
 
 @app.get("/")

@@ -239,10 +239,21 @@ def preprocess_video(video_id: str, frame_interval_seconds: float = 5.0) -> dict
         frames = extract_frames(video_path, output_dir, frame_interval_seconds=frame_interval_seconds)
 
         metadata_path = output_dir / "metadata.json"
-        metadata_path.write_text(
-            json.dumps({"video_id": video_id, "metadata": metadata}, indent=2),
-            encoding="utf-8",
-        )
+        metadata_payload = {
+            "video_id": video_id,
+            "metadata": metadata,
+            "frame_timestamps": [frame["timestamp"] for frame in frames],
+            "frame_details": [
+                {
+                    "frame_number": frame["frame_number"],
+                    "frame_filename": Path(frame["image_path"]).name,
+                    "timestamp": frame["timestamp"],
+                    "image_path": frame["image_path"],
+                }
+                for frame in frames
+            ],
+        }
+        metadata_path.write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
 
         result = {
             "video_id": video_id,
