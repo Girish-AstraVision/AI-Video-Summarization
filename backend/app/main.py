@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.chapters import router as chapters_router
 from app.api.routes.content_moderation import router as content_moderation_router
 from app.api.routes.health import router as health_router
 from app.api.routes.keyframes import router as keyframes_router
@@ -34,6 +35,7 @@ app.include_router(speech_to_text_router)
 app.include_router(content_moderation_router)
 app.include_router(keyframes_router)
 app.include_router(summarization_router)
+app.include_router(chapters_router)
 
 
 @app.get("/")
