@@ -1,12 +1,9 @@
 export function Header() {
   return (
     <header className="topbar">
-      <div className="brand-block">
-        <div className="brand-mark">A</div>
-        <div>
-          <div className="brand-name">AstraVision</div>
-          <div className="brand-subtitle">AI Video Intelligence Platform</div>
-        </div>
+      <div className="topbar-title-wrap">
+        <p className="eyebrow subtle-eyebrow">AI Video Analysis</p>
+        <h2 className="topbar-title">Multimodal Research Dashboard</h2>
       </div>
 
       <div className="status-indicator" aria-label="System status">

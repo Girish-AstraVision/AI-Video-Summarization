@@ -190,21 +190,25 @@ export function UploadCard({ videoId, onUploadSuccess, onPreprocessStateChange, 
         <div className="upload-icon" aria-hidden="true">
           ⇪
         </div>
-        <h3>Upload a video to begin analysis</h3>
-        <p>Supported formats: MP4, MOV, AVI, MKV</p>
 
-        {selectedFile ? (
-          <div className="file-meta-box" aria-live="polite">
-            <div>
-              <span className="meta-label">Selected file</span>
-              <strong>{selectedFile.name}</strong>
-            </div>
-            <div>
-              <span className="meta-label">Size</span>
-              <strong>{formatFileSize(selectedFile.size)}</strong>
-            </div>
+        <h3>Upload a video to begin analysis</h3>
+        <p className="upload-subtitle">Analyze video, audio, speech and visual content using AI</p>
+
+        <div className="supported-formats" aria-label="Supported video formats">
+          <span>Supported formats:</span>
+          <div className="format-list">
+            <span>MP4</span>
+            <span>MOV</span>
+            <span>AVI</span>
+            <span>MKV</span>
           </div>
-        ) : null}
+        </div>
+
+        <div className="dropzone-box" aria-label="Drag and drop upload area">
+          <div className="dropzone-text">Drag &amp; drop your video here</div>
+          <span className="dropzone-or">or</span>
+          <span className="dropzone-hint">choose a file from your computer</span>
+        </div>
 
         <div className="upload-actions">
           <button
@@ -229,52 +233,83 @@ export function UploadCard({ videoId, onUploadSuccess, onPreprocessStateChange, 
               }}
               disabled={isUploading || isProcessing}
             >
-              Upload selected file
-            </button>
-          ) : null}
-
-          {videoId && !isProcessing ? (
-            <button
-              type="button"
-              className="primary-button process-button"
-              onClick={(event) => {
-                event.stopPropagation();
-                void handlePreprocess();
-              }}
-            >
-              Start Analysis
-            </button>
-          ) : null}
-
-          {isProcessing ? (
-            <button type="button" className="secondary-button process-button" disabled>
-              Processing video...
+              Upload Video
             </button>
           ) : null}
         </div>
+
+        {selectedFile ? (
+          <div className="file-meta-box" aria-live="polite">
+            <div>
+              <span className="meta-label">Selected file</span>
+              <strong>{selectedFile.name}</strong>
+            </div>
+            <div>
+              <span className="meta-label">Size</span>
+              <strong>{formatFileSize(selectedFile.size)}</strong>
+            </div>
+            <div>
+              <span className="meta-label">Status</span>
+              <strong>Ready to upload</strong>
+            </div>
+          </div>
+        ) : null}
 
         {error ? <div className="upload-message error-message">{error}</div> : null}
 
         {success ? (
           <div className="upload-message success-message" aria-live="polite">
             <strong>Upload successful</strong>
-            <span>Original filename: {success.original_filename}</span>
-            <span>Video ID: {success.video_id}</span>
-            <span>File size: {formatFileSize(success.file_size)}</span>
-            <span>Status: {success.status}</span>
+            <div className="success-metadata-grid">
+              <div className="success-metadata-item">
+                <span>Original filename</span>
+                <strong>{success.original_filename}</strong>
+              </div>
+              <div className="success-metadata-item">
+                <span>Video ID</span>
+                <strong>{success.video_id}</strong>
+              </div>
+              <div className="success-metadata-item">
+                <span>File size</span>
+                <strong>{formatFileSize(success.file_size)}</strong>
+              </div>
+              <div className="success-metadata-item">
+                <span>Processing status</span>
+                <strong>{success.status}</strong>
+              </div>
+            </div>
           </div>
+        ) : null}
+
+        {videoId && !isProcessing ? (
+          <button
+            type="button"
+            className="primary-button process-button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handlePreprocess();
+            }}
+          >
+            Start Analysis
+          </button>
+        ) : null}
+
+        {isProcessing ? (
+          <button type="button" className="secondary-button process-button" disabled>
+            Processing video...
+          </button>
         ) : null}
 
         {preprocessingResult ? (
           <div className="preprocessing-summary" aria-live="polite">
             <div className="preprocessing-summary-header">Preprocessing complete</div>
             <div className="preprocessing-summary-grid">
-              <span>Duration: {formatDuration(preprocessingResult.metadata.duration)}</span>
-              <span>Resolution: {preprocessingResult.metadata.width && preprocessingResult.metadata.height ? `${preprocessingResult.metadata.width} × ${preprocessingResult.metadata.height}` : 'N/A'}</span>
-              <span>FPS: {preprocessingResult.metadata.fps ?? 'N/A'}</span>
-              <span>Frames: {preprocessingResult.frame_count}</span>
-              <span>Audio: {preprocessingResult.metadata.audio_present ? 'Extracted' : 'Not present'}</span>
-              <span>Status: {preprocessingResult.preprocessing_status}</span>
+              <div className="preprocessing-item"><span>Duration</span><strong>{formatDuration(preprocessingResult.metadata.duration)}</strong></div>
+              <div className="preprocessing-item"><span>Resolution</span><strong>{preprocessingResult.metadata.width && preprocessingResult.metadata.height ? `${preprocessingResult.metadata.width} × ${preprocessingResult.metadata.height}` : 'N/A'}</strong></div>
+              <div className="preprocessing-item"><span>FPS</span><strong>{preprocessingResult.metadata.fps ?? 'N/A'}</strong></div>
+              <div className="preprocessing-item"><span>Frames</span><strong>{preprocessingResult.frame_count}</strong></div>
+              <div className="preprocessing-item"><span>Audio</span><strong>{preprocessingResult.metadata.audio_present ? 'Extracted' : 'Not present'}</strong></div>
+              <div className="preprocessing-item"><span>Status</span><strong>{preprocessingResult.preprocessing_status}</strong></div>
             </div>
           </div>
         ) : null}

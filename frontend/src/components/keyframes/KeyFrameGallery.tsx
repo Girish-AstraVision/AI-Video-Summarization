@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config/env';
 import type { KeyFrameSelectionResult } from '../../types/api';
 
 type KeyFrameGalleryProps = {
@@ -26,21 +27,33 @@ export function KeyFrameGallery({ result, onTimestampClick, isVisible }: KeyFram
 
   return (
     <section className="panel keyframe-panel" aria-live="polite">
-      <div className="panel-heading inline-heading">
-        <h3>Key Frames</h3>
+      <div className="panel-heading keyframe-header">
+        <div>
+          <p className="eyebrow subtle-eyebrow">Key Frame Selection</p>
+          <h3>Key Frame Selection</h3>
+          <p className="keyframe-subtitle">Important frames extracted from your video using visual and content analysis</p>
+        </div>
+
+        <button type="button" className="secondary-button" onClick={() => onTimestampClick(frames[0]?.timestamp ?? 0)}>
+          Select Key Frames
+        </button>
       </div>
 
-      <div className="visual-summary-grid">
+      <div className="keyframe-stat-grid">
         <div className="metric-item">
-          <span className="metric-label">Frames analyzed</span>
+          <span className="metric-label">Total Frames Analyzed</span>
           <strong>{result.total_frames_analyzed}</strong>
         </div>
         <div className="metric-item">
-          <span className="metric-label">Selected</span>
+          <span className="metric-label">Key Frames Selected</span>
           <strong>{result.number_selected}</strong>
         </div>
         <div className="metric-item">
-          <span className="metric-label">Processing time</span>
+          <span className="metric-label">Average / Top Importance</span>
+          <strong>{frames.length > 0 ? formatScore(frames.reduce((sum, frame) => sum + frame.importance_score, 0) / frames.length) : '0.00'}</strong>
+        </div>
+        <div className="metric-item">
+          <span className="metric-label">Processing Time</span>
           <strong>{result.processing_time.toFixed(2)}s</strong>
         </div>
       </div>
@@ -49,33 +62,60 @@ export function KeyFrameGallery({ result, onTimestampClick, isVisible }: KeyFram
         {frames.length === 0 ? (
           <div className="visual-empty-state">No key frames were returned for this video.</div>
         ) : (
-          frames.map((frame) => (
-            <button
-              key={`${frame.frame_filename}-${frame.timestamp}`}
-              type="button"
-              className="keyframe-card"
-              onClick={() => onTimestampClick(frame.timestamp)}
-              aria-label={`Seek to ${formatTimestamp(frame.timestamp)}`}
-            >
-              <div className="keyframe-visual" aria-label={`Key frame at ${formatTimestamp(frame.timestamp)}`}>
-                <span className="keyframe-badge">{formatScore(frame.importance_score)}</span>
-              </div>
-              <div className="keyframe-meta">
-                <div className="keyframe-time">{formatTimestamp(frame.timestamp)}</div>
-                <div className="keyframe-title">{frame.frame_filename}</div>
-                <div className="speech-segment-text">Importance score: {formatScore(frame.importance_score)}</div>
-                <div className="speech-segment-text">
-                  {frame.detected_objects.length > 0 ? `Objects: ${frame.detected_objects.join(', ')}` : 'No detected objects recorded'}
-                </div>
-              </div>
-            </button>
-          ))
-        )}
-      </div>
+          frames.map((frame) => {
+            const imageUrl = `${API_BASE_URL}/api/videos/${encodeURIComponent(result.video_id)}/frames/${encodeURIComponent(frame.frame_filename)}`;
 
-      <div className="visual-detection-meta" aria-label="Key-frame image availability note">
-        <span className="meta-label">Frame image source</span>
-        <strong>Stored on disk by the backend; no direct HTTP image endpoint is currently exposed.</strong>
+            return (
+              <article key={`${frame.frame_filename}-${frame.timestamp}`} className="keyframe-card">
+                <div className="keyframe-media" aria-label={`Key frame at ${formatTimestamp(frame.timestamp)}`}>
+                  <img
+                    src={imageUrl}
+                    alt={frame.frame_filename}
+                    className="keyframe-image"
+                    loading="lazy"
+                    onError={(event) => {
+                      const element = event.currentTarget;
+                      element.style.display = 'none';
+                      const parent = element.parentElement;
+                      if (parent) {
+                        parent.classList.add('fallback-media');
+                      }
+                    }}
+                  />
+                  <span className="keyframe-badge">{formatTimestamp(frame.timestamp)}</span>
+                </div>
+
+                <div className="keyframe-meta">
+                  <div className="keyframe-filename">{frame.frame_filename}</div>
+
+                  <div className="keyframe-score-row">
+                    <span className="meta-label">Importance Score</span>
+                    <strong>{formatScore(frame.importance_score)}</strong>
+                  </div>
+
+                  {frame.detected_objects.length > 0 ? (
+                    <div className="keyframe-object-list" aria-label="Detected objects in key frame">
+                      {frame.detected_objects.map((objectLabel) => (
+                        <span key={`${frame.frame_filename}-${objectLabel}`} className="keyframe-pill">
+                          {objectLabel}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="keyframe-timestamp-button"
+                    onClick={() => onTimestampClick(frame.timestamp)}
+                    aria-label={`Seek to ${formatTimestamp(frame.timestamp)}`}
+                  >
+                    ▶ Go to Timestamp
+                  </button>
+                </div>
+              </article>
+            );
+          })
+        )}
       </div>
     </section>
   );

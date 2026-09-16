@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -37,6 +37,7 @@ import type {
 import type { ProcessingStep } from './types/dashboard';
 
 function App() {
+  const [activeSection, setActiveSection] = useState<string>('dashboard');
   const [videoId, setVideoId] = useState<string | null>(null);
   const [preprocessingState, setPreprocessingState] = useState<PreprocessingState>('idle');
   const [preprocessingResult, setPreprocessingResult] = useState<PreprocessingResult | null>(null);
@@ -409,23 +410,63 @@ function App() {
     setSeekToTime(timestamp);
   };
 
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (!element) {
+      return;
+    }
+
+    setActiveSection(sectionId);
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  useEffect(() => {
+    const sectionIds = ['dashboard', 'video-analysis', 'summarization', 'chapters', 'key-frames', 'moderation', 'event-timeline'];
+
+    const elements = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter((element): element is HTMLElement => element instanceof HTMLElement);
+
+    if (elements.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntry = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visibleEntry) {
+          setActiveSection(visibleEntry.target.id);
+        }
+      },
+      {
+        rootMargin: '-15% 0px -45% 0px',
+        threshold: [0.2, 0.45, 0.7],
+      },
+    );
+
+    elements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="app-shell">
       <Header />
 
       <div className="main-layout">
-        <Sidebar />
+        <Sidebar activeSection={activeSection} onNavigate={scrollToSection} />
 
         <main className="content-area">
-          <section className="welcome-panel">
-            <div>
-              <p className="eyebrow">AI Video Analysis</p>
+          <section id="dashboard" className="welcome-panel">
+            <div className="welcome-content">
+              <p className="eyebrow">Welcome 👋</p>
               <h1>AI Video Analysis</h1>
             </div>
             <p className="welcome-copy">
-              This system analyzes video, audio, speech, and visual events to extract meaningful
-              insights from raw content. It combines multimodal cues to generate summaries, detect
-              key moments, and identify content-sensitive patterns.
+              Upload a video and discover insights using AI.
             </p>
           </section>
 
@@ -443,96 +484,129 @@ function App() {
           </section>
 
           {preprocessingState === 'complete' ? (
-            <section className="panel analysis-controls-panel" aria-label="Visual analysis controls">
-              <div className="analysis-controls-row">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    void handleRunVisualAnalysis();
-                  }}
-                  disabled={visualDetectionState === 'in-progress'}
-                >
-                  {visualDetectionState === 'in-progress' ? 'Running RT-DETR visual analysis...' : 'Run Visual Analysis'}
-                </button>
+            <section className="panel quick-analysis-panel" aria-label="AI analysis modules">
+              <div className="panel-heading quick-analysis-heading">
+                <div>
+                  <p className="eyebrow subtle-eyebrow">AI Analysis Modules</p>
+                  <h3>Run analysis modules</h3>
+                </div>
               </div>
-              {visualDetectionError ? <div className="upload-message error-message">{visualDetectionError}</div> : null}
+
+              <div className="quick-analysis-grid">
+                <div className="quick-analysis-card">
+                  <div className="quick-analysis-header">
+                    <span className="quick-analysis-icon">◉</span>
+                    <div>
+                      <h4>Visual Analysis</h4>
+                      <span className="module-subtitle">RT-DETR object detection</span>
+                    </div>
+                  </div>
+                  <div className={`module-status ${visualDetectionState === 'complete' ? 'success' : visualDetectionState === 'failed' ? 'error' : visualDetectionState === 'in-progress' ? 'running' : 'idle'}`}>
+                    {visualDetectionState === 'in-progress' ? 'RUNNING' : visualDetectionState === 'complete' ? 'COMPLETE' : visualDetectionState === 'failed' ? 'FAILED' : 'READY'}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleRunVisualAnalysis()}
+                    disabled={visualDetectionState === 'in-progress'}
+                  >
+                    {visualDetectionState === 'in-progress' ? 'Running...' : 'Run Analysis'}
+                  </button>
+                  {visualDetectionError ? <div className="upload-message error-message">{visualDetectionError}</div> : null}
+                </div>
+
+                <div className="quick-analysis-card">
+                  <div className="quick-analysis-header">
+                    <span className="quick-analysis-icon">◌</span>
+                    <div>
+                      <h4>Speech Analysis</h4>
+                      <span className="module-subtitle">Whisper transcription</span>
+                    </div>
+                  </div>
+                  <div className={`module-status ${speechToTextState === 'complete' ? 'success' : speechToTextState === 'failed' ? 'error' : speechToTextState === 'in-progress' ? 'running' : 'idle'}`}>
+                    {speechToTextState === 'in-progress' ? 'RUNNING' : speechToTextState === 'complete' ? 'COMPLETE' : speechToTextState === 'failed' ? 'FAILED' : 'READY'}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleRunSpeechAnalysis()}
+                    disabled={speechToTextState === 'in-progress'}
+                  >
+                    {speechToTextState === 'in-progress' ? 'Running...' : 'Run Analysis'}
+                  </button>
+                  {speechToTextError ? <div className="upload-message error-message">{speechToTextError}</div> : null}
+                </div>
+
+                <div className="quick-analysis-card">
+                  <div className="quick-analysis-header">
+                    <span className="quick-analysis-icon">▣</span>
+                    <div>
+                      <h4>Key Frame Selection</h4>
+                      <span className="module-subtitle">Representative frame extraction</span>
+                    </div>
+                  </div>
+                  <div className={`module-status ${keyFrameState === 'complete' ? 'success' : keyFrameState === 'failed' ? 'error' : keyFrameState === 'in-progress' ? 'running' : 'idle'}`}>
+                    {keyFrameState === 'in-progress' ? 'RUNNING' : keyFrameState === 'complete' ? 'COMPLETE' : keyFrameState === 'failed' ? 'FAILED' : 'READY'}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleRunKeyFrameAnalysis()}
+                    disabled={keyFrameState === 'in-progress'}
+                  >
+                    {keyFrameState === 'in-progress' ? 'Selecting...' : 'Select Frames'}
+                  </button>
+                  {keyFrameError ? <div className="upload-message error-message">{keyFrameError}</div> : null}
+                </div>
+
+                <div className="quick-analysis-card">
+                  <div className="quick-analysis-header">
+                    <span className="quick-analysis-icon">▤</span>
+                    <div>
+                      <h4>Chapter Generation</h4>
+                      <span className="module-subtitle">Automatic video segmentation</span>
+                    </div>
+                  </div>
+                  <div className={`module-status ${chapterState === 'complete' ? 'success' : chapterState === 'failed' ? 'error' : chapterState === 'in-progress' ? 'running' : 'idle'}`}>
+                    {chapterState === 'in-progress' ? 'RUNNING' : chapterState === 'complete' ? 'COMPLETE' : chapterState === 'failed' ? 'FAILED' : 'READY'}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleRunChapterAnalysis()}
+                    disabled={chapterState === 'in-progress'}
+                  >
+                    {chapterState === 'in-progress' ? 'Generating...' : 'Generate Chapters'}
+                  </button>
+                  {chapterError ? <div className="upload-message error-message">{chapterError}</div> : null}
+                </div>
+
+                <div className="quick-analysis-card">
+                  <div className="quick-analysis-header">
+                    <span className="quick-analysis-icon">⚑</span>
+                    <div>
+                      <h4>Content Moderation</h4>
+                      <span className="module-subtitle">Sensitive content detection</span>
+                    </div>
+                  </div>
+                  <div className={`module-status ${moderationState === 'complete' ? 'success' : moderationState === 'failed' ? 'error' : moderationState === 'in-progress' ? 'running' : 'idle'}`}>
+                    {moderationState === 'in-progress' ? 'RUNNING' : moderationState === 'complete' ? 'COMPLETE' : moderationState === 'failed' ? 'FAILED' : 'READY'}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleRunModerationAnalysis()}
+                    disabled={moderationState === 'in-progress'}
+                  >
+                    {moderationState === 'in-progress' ? 'Running...' : 'Run Check'}
+                  </button>
+                  {moderationError ? <div className="upload-message error-message">{moderationError}</div> : null}
+                </div>
+              </div>
             </section>
           ) : null}
 
-          {preprocessingState === 'complete' ? (
-            <section className="panel analysis-controls-panel" aria-label="Speech analysis controls">
-              <div className="analysis-controls-row">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    void handleRunSpeechAnalysis();
-                  }}
-                  disabled={speechToTextState === 'in-progress'}
-                >
-                  {speechToTextState === 'in-progress' ? 'Running Whisper speech analysis...' : 'Run Speech Analysis'}
-                </button>
-              </div>
-              {speechToTextError ? <div className="upload-message error-message">{speechToTextError}</div> : null}
-            </section>
-          ) : null}
-
-          {preprocessingState === 'complete' ? (
-            <section className="panel analysis-controls-panel" aria-label="Key-frame analysis controls">
-              <div className="analysis-controls-row">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    void handleRunKeyFrameAnalysis();
-                  }}
-                  disabled={keyFrameState === 'in-progress'}
-                >
-                  {keyFrameState === 'in-progress' ? 'Selecting key frames...' : 'Run Key Frame Selection'}
-                </button>
-              </div>
-              {keyFrameError ? <div className="upload-message error-message">{keyFrameError}</div> : null}
-            </section>
-          ) : null}
-
-          {preprocessingState === 'complete' ? (
-            <section className="panel analysis-controls-panel" aria-label="Chapter analysis controls">
-              <div className="analysis-controls-row">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    void handleRunChapterAnalysis();
-                  }}
-                  disabled={chapterState === 'in-progress'}
-                >
-                  {chapterState === 'in-progress' ? 'Generating chapters...' : 'Run Chapter Analysis'}
-                </button>
-              </div>
-              {chapterError ? <div className="upload-message error-message">{chapterError}</div> : null}
-            </section>
-          ) : null}
-
-          {preprocessingState === 'complete' ? (
-            <section className="panel analysis-controls-panel" aria-label="Moderation analysis controls">
-              <div className="analysis-controls-row">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    void handleRunModerationAnalysis();
-                  }}
-                  disabled={moderationState === 'in-progress'}
-                >
-                  {moderationState === 'in-progress' ? 'Running content moderation...' : 'Run Moderation Check'}
-                </button>
-              </div>
-              {moderationError ? <div className="upload-message error-message">{moderationError}</div> : null}
-            </section>
-          ) : null}
-
-          <section className="workspace-grid">
+          <section id="video-analysis" className="workspace-grid">
             <VideoWorkspace videoId={videoId} seekToTime={seekToTime} onSeekHandled={() => setSeekToTime(null)} />
             <ProcessingStatus steps={processingSteps} />
           </section>
@@ -554,22 +628,26 @@ function App() {
           ) : null}
 
           {keyFrameResult ? (
-            <KeyFrameGallery
-              result={keyFrameResult}
-              onTimestampClick={handleTimestampSeek}
-              isVisible={keyFrameState !== 'idle'}
-            />
+            <section id="key-frames">
+              <KeyFrameGallery
+                result={keyFrameResult}
+                onTimestampClick={handleTimestampSeek}
+                isVisible={keyFrameState !== 'idle'}
+              />
+            </section>
           ) : null}
 
           {moderationResult ? (
-            <ModerationPanel
-              result={moderationResult}
-              onTimestampClick={handleTimestampSeek}
-              isVisible={moderationState !== 'idle'}
-            />
+            <div id="moderation">
+              <ModerationPanel
+                result={moderationResult}
+                onTimestampClick={handleTimestampSeek}
+                isVisible={moderationState !== 'idle'}
+              />
+            </div>
           ) : null}
 
-          <section className="summary-grid">
+          <section id="summarization" className="summary-grid">
             <SummaryPanel
               videoId={videoId}
               result={summarizationResult}
@@ -581,18 +659,20 @@ function App() {
           </section>
 
           {chapterResult ? (
-            <section className="content-grid two-column">
+            <section id="chapters" className="content-grid two-column">
               <ChapterList result={chapterResult} onTimestampClick={handleTimestampSeek} isVisible={chapterState !== 'idle'} />
-              <EventTimeline
-                events={timelineResult?.events ?? []}
-                onTimestampClick={handleTimestampSeek}
-                isLoading={timelineState === 'in-progress'}
-                error={timelineError}
-                onRefresh={handleGenerateTimeline}
-              />
+              <div id="event-timeline">
+                <EventTimeline
+                  events={timelineResult?.events ?? []}
+                  onTimestampClick={handleTimestampSeek}
+                  isLoading={timelineState === 'in-progress'}
+                  error={timelineError}
+                  onRefresh={handleGenerateTimeline}
+                />
+              </div>
             </section>
           ) : (
-            <section className="content-grid two-column">
+            <section id="event-timeline" className="content-grid two-column">
               <EventTimeline
                 events={timelineResult?.events ?? []}
                 onTimestampClick={handleTimestampSeek}
