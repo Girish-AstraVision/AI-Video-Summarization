@@ -12,9 +12,10 @@ import { KeyFrameGallery } from './components/keyframes/KeyFrameGallery';
 import { ModerationPanel } from './components/moderation/ModerationPanel';
 import { EventTimeline } from './components/timeline/EventTimeline';
 import { VisualDetectionPanel } from './components/visual/VisualDetectionPanel';
+import { SpeechTranscriptPanel } from './components/speech/SpeechTranscriptPanel';
 import { chapterItems, keyFrameItems, moderationItems, overviewCards, timelineEvents } from './data/mockData';
-import { detectVisualObjects } from './services/api';
-import type { PreprocessingResult, PreprocessingState, VisualDetectionResult } from './types/api';
+import { detectVisualObjects, transcribeVideo } from './services/api';
+import type { PreprocessingResult, PreprocessingState, SpeechToTextResult, VisualDetectionResult } from './types/api';
 import type { ProcessingStep } from './types/dashboard';
 
 function App() {
@@ -24,9 +25,12 @@ function App() {
   const [visualDetectionState, setVisualDetectionState] = useState<PreprocessingState>('idle');
   const [visualDetectionResult, setVisualDetectionResult] = useState<VisualDetectionResult | null>(null);
   const [visualDetectionError, setVisualDetectionError] = useState<string | null>(null);
+  const [speechToTextState, setSpeechToTextState] = useState<PreprocessingState>('idle');
+  const [speechToTextResult, setSpeechToTextResult] = useState<SpeechToTextResult | null>(null);
+  const [speechToTextError, setSpeechToTextError] = useState<string | null>(null);
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
 
-  const overviewSummary = useMemo(() => {
+  const objectSummary = useMemo(() => {
     if (visualDetectionState === 'in-progress') {
       return { value: 'Analyzing...', detail: 'Analyzing...' };
     }
@@ -50,18 +54,39 @@ function App() {
     return { value: 'Not analyzed', detail: 'Not analyzed' };
   }, [visualDetectionResult, visualDetectionState]);
 
+  const speechSummary = useMemo(() => {
+    if (speechToTextState === 'in-progress') {
+      return { value: 'Analyzing...', detail: 'Running Whisper...' };
+    }
+
+    if (speechToTextState === 'complete' && speechToTextResult) {
+      return {
+        value: String(speechToTextResult.number_of_segments),
+        detail: `Detected language: ${speechToTextResult.detected_language}`,
+      };
+    }
+
+    return { value: 'Not analyzed', detail: 'Not analyzed' };
+  }, [speechToTextResult, speechToTextState]);
+
   const overviewItems = useMemo(
     () => [
-      ...overviewCards.slice(0, 1),
+      overviewCards[0],
       {
         label: 'Detected Objects',
-        value: overviewSummary.value,
-        detail: overviewSummary.detail,
+        value: objectSummary.value,
+        detail: objectSummary.detail,
         tone: 'violet' as const,
       },
-      ...overviewCards.slice(2),
+      {
+        label: 'Speech Segments',
+        value: speechSummary.value,
+        detail: speechSummary.detail,
+        tone: 'teal' as const,
+      },
+      overviewCards[3],
     ],
-    [overviewSummary],
+    [objectSummary, speechSummary],
   );
 
   const processingSteps = useMemo<ProcessingStep[]>(() => {
@@ -92,15 +117,27 @@ function App() {
             ? 'Failed'
             : 'Pending';
 
+    const speechAnalysisValue =
+      speechToTextState === 'in-progress' ? 72 : speechToTextState === 'complete' ? 100 : speechToTextState === 'failed' ? 35 : 0;
+
+    const speechAnalysisStatus =
+      speechToTextState === 'in-progress'
+        ? 'In Progress'
+        : speechToTextState === 'complete'
+          ? 'Complete'
+          : speechToTextState === 'failed'
+            ? 'Failed'
+            : 'Pending';
+
     return [
       { name: 'Upload', status: uploadStatus, value: uploadValue },
       { name: 'Preprocessing', status: preprocessingStatus, value: preprocessingValue },
       { name: 'Visual Analysis', status: visualAnalysisStatus, value: visualAnalysisValue },
-      { name: 'Speech Analysis', status: 'Pending', value: 0 },
+      { name: 'Speech Analysis', status: speechAnalysisStatus, value: speechAnalysisValue },
       { name: 'Summarization', status: 'Pending', value: 0 },
       { name: 'Moderation', status: 'Pending', value: 0 },
     ];
-  }, [preprocessingState, videoId, visualDetectionState]);
+  }, [preprocessingState, speechToTextState, videoId, visualDetectionState]);
 
   const handleRunVisualAnalysis = async () => {
     if (!videoId) {
@@ -119,6 +156,26 @@ function App() {
       const message = error instanceof Error ? error.message : 'RT-DETR visual analysis failed. Please try again.';
       setVisualDetectionError(message);
       setVisualDetectionState('failed');
+    }
+  };
+
+  const handleRunSpeechAnalysis = async () => {
+    if (!videoId) {
+      setSpeechToTextError('Please upload a video before running speech analysis.');
+      return;
+    }
+
+    setSpeechToTextState('in-progress');
+    setSpeechToTextError(null);
+
+    try {
+      const result = await transcribeVideo(videoId);
+      setSpeechToTextResult(result);
+      setSpeechToTextState('complete');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Whisper speech analysis failed. Please try again.';
+      setSpeechToTextError(message);
+      setSpeechToTextState('failed');
     }
   };
 
@@ -177,6 +234,24 @@ function App() {
             </section>
           ) : null}
 
+          {preprocessingState === 'complete' ? (
+            <section className="panel analysis-controls-panel" aria-label="Speech analysis controls">
+              <div className="analysis-controls-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    void handleRunSpeechAnalysis();
+                  }}
+                  disabled={speechToTextState === 'in-progress'}
+                >
+                  {speechToTextState === 'in-progress' ? 'Running Whisper speech analysis...' : 'Run Speech Analysis'}
+                </button>
+              </div>
+              {speechToTextError ? <div className="upload-message error-message">{speechToTextError}</div> : null}
+            </section>
+          ) : null}
+
           <section className="workspace-grid">
             <VideoWorkspace videoId={videoId} seekToTime={seekToTime} onSeekHandled={() => setSeekToTime(null)} />
             <ProcessingStatus steps={processingSteps} />
@@ -187,6 +262,14 @@ function App() {
               result={visualDetectionResult}
               onTimestampClick={handleTimestampSeek}
               isVisible={visualDetectionState !== 'idle'}
+            />
+          ) : null}
+
+          {speechToTextResult ? (
+            <SpeechTranscriptPanel
+              result={speechToTextResult}
+              onTimestampClick={handleTimestampSeek}
+              isVisible={speechToTextState !== 'idle'}
             />
           ) : null}
 

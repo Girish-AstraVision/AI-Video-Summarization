@@ -59,4 +59,22 @@ export interface VisualDetectionResult {
   model_name: string;
 }
 
+export interface SpeechSegment {
+  segment_number: number;
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface SpeechToTextResult {
+  video_id: string;
+  audio_path: string;
+  model_name: string;
+  detected_language: string;
+  language_probability: number;
+  number_of_segments: number;
+  segments: SpeechSegment[];
+  processing_time: number;
+}
+
 export type PreprocessingState = 'idle' | 'in-progress' | 'complete' | 'failed';
