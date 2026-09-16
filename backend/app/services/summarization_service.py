@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from app.services.keyframe_service import MissingKeyframeDataError, select_keyframes_for_video
+from app.services.speech_to_text_service import transcribe_video_audio
 from app.services.video_service import get_project_root
+from app.services.visual_detection_service import process_video_visual_detection
 
 logger = logging.getLogger(__name__)
 
@@ -97,28 +99,97 @@ def _read_json(path: Path, description: str, video_id: str) -> dict[str, Any]:
     return payload
 
 
+def _ensure_output_directory_exists(video_id: str) -> Path:
+    output_dir = get_project_root() / "outputs" / video_id
+    if not output_dir.exists():
+        raise FileNotFoundError(f"Video '{video_id}' was not found.")
+    return output_dir
+
+
+def _persist_json_artifact(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def load_transcript_data(video_id: str) -> dict[str, Any]:
-    transcript_path = get_project_root() / "outputs" / video_id / "transcript.json"
-    transcript = _read_json(transcript_path, "Transcript data", video_id)
-    segments = transcript.get("segments") or transcript.get("transcript_segments") or []
+    output_dir = _ensure_output_directory_exists(video_id)
+    transcript_path = output_dir / "transcript.json"
+
+    if transcript_path.exists():
+        transcript = _read_json(transcript_path, "Transcript data", video_id)
+        segments = transcript.get("segments") or transcript.get("transcript_segments") or []
+        if not isinstance(segments, list) or not segments:
+            raise MissingSummaryDataError(f"Transcript segments are missing for video_id '{video_id}'.")
+        return transcript
+
+    logger.info(
+        "Transcript artifact missing for video_id=%s; generating from speech service. transcript_path=%s",
+        video_id,
+        transcript_path,
+    )
+
+    try:
+        transcript_payload = transcribe_video_audio(video_id=video_id)
+    except Exception as exc:
+        raise MissingSummaryDataError(f"Transcript data not found for video_id '{video_id}'.") from exc
+
+    segments = transcript_payload.get("segments") or []
     if not isinstance(segments, list) or not segments:
         raise MissingSummaryDataError(f"Transcript segments are missing for video_id '{video_id}'.")
-    return transcript
+
+    normalized_transcript = {
+        "video_id": video_id,
+        "segments": [
+            {
+                "segment_number": index + 1,
+                "start": float(segment.get("start", 0.0) or 0.0),
+                "end": float(segment.get("end", 0.0) or 0.0),
+                "text": str(segment.get("text") or "").strip(),
+            }
+            for index, segment in enumerate(segments)
+            if isinstance(segment, dict) and str(segment.get("text") or "").strip()
+        ],
+    }
+    _persist_json_artifact(transcript_path, normalized_transcript)
+    return normalized_transcript
 
 
 def load_visual_detection_data(video_id: str) -> list[dict[str, Any]]:
-    detection_path = get_project_root() / "outputs" / video_id / "visual_detection.json"
-    detection_payload = _read_json(detection_path, "Visual detection data", video_id)
+    output_dir = _ensure_output_directory_exists(video_id)
+    detection_path = output_dir / "visual_detection.json"
+
+    if detection_path.exists():
+        detection_payload = _read_json(detection_path, "Visual detection data", video_id)
+        detections = detection_payload.get("detections", [])
+        if not isinstance(detections, list) or not detections:
+            raise MissingSummaryDataError(
+                f"RT-DETR visual detection data is missing for video_id '{video_id}'."
+            )
+        return detections
+
+    logger.info(
+        "Visual detection artifact missing for video_id=%s; generating from detection service. detection_path=%s",
+        video_id,
+        detection_path,
+    )
+    try:
+        detection_payload = process_video_visual_detection(video_id=video_id)
+    except Exception as exc:
+        raise MissingSummaryDataError(f"RT-DETR visual detection data is missing for video_id '{video_id}'.") from exc
+
     detections = detection_payload.get("detections", [])
     if not isinstance(detections, list) or not detections:
         raise MissingSummaryDataError(
             f"RT-DETR visual detection data is missing for video_id '{video_id}'."
         )
+
+    _persist_json_artifact(detection_path, detection_payload)
     return detections
 
 
 def load_keyframe_data(video_id: str) -> list[dict[str, Any]]:
-    keyframe_path = get_project_root() / "outputs" / video_id / "keyframes.json"
+    output_dir = _ensure_output_directory_exists(video_id)
+    keyframe_path = output_dir / "keyframes.json"
     if keyframe_path.exists():
         payload = _read_json(keyframe_path, "Key-frame data", video_id)
         selected_frames = payload.get("selected_frames") or payload.get("key_frames") or []
@@ -128,11 +199,14 @@ def load_keyframe_data(video_id: str) -> list[dict[str, Any]]:
     try:
         keyframe_payload = select_keyframes_for_video(video_id=video_id, num_keyframes=10)
     except (MissingKeyframeDataError, ValueError) as exc:
-        raise MissingSummaryDataError(f"Key-frame data is missing or invalid for video_id '{video_id}'.") from exc
+        logger.warning("Key-frame data unavailable for video_id=%s; continuing with empty key-frame list. Reason: %s", video_id, exc)
+        return []
 
     selected_frames = keyframe_payload.get("selected_frames") or []
-    if not isinstance(selected_frames, list) or not selected_frames:
-        raise MissingSummaryDataError(f"Key-frame data is missing for video_id '{video_id}'.")
+    if not isinstance(selected_frames, list):
+        return []
+
+    _persist_json_artifact(keyframe_path, keyframe_payload)
     return selected_frames
 
 

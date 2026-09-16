@@ -138,4 +138,43 @@ export interface SpeechToTextResult {
   processing_time: number;
 }
 
+export interface SummarySegment {
+  start_time: number;
+  end_time: number;
+  text: string;
+  importance_score: number;
+}
+
+export interface SummaryKeyFrame {
+  frame_filename: string;
+  timestamp: number;
+  importance_score: number;
+  detected_objects: string[];
+}
+
+export interface ImportantEvent {
+  timestamp: number;
+  label: string;
+  description: string;
+  severity: string;
+}
+
+export interface SummarizeVideoRequest {
+  summary_length?: 'short' | 'medium' | 'long';
+  target_duration?: number | null;
+}
+
+export interface SummarizeVideoResponse {
+  video_id: string;
+  summary_length: 'short' | 'medium' | 'long';
+  target_duration: number | null;
+  actual_summary_duration: number;
+  summary_text: string;
+  number_of_segments: number;
+  segments: SummarySegment[];
+  key_frames: SummaryKeyFrame[];
+  processing_time: number;
+  important_events: ImportantEvent[];
+}
+
 export type PreprocessingState = 'idle' | 'in-progress' | 'complete' | 'failed';

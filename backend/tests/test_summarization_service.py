@@ -159,7 +159,7 @@ def test_summarization_service_raises_for_missing_transcript(tmp_path: Path) -> 
             summarize_video(video_id=video_id)
 
 
-def test_summarization_service_raises_for_missing_keyframe_data(tmp_path: Path) -> None:
+def test_summarization_service_allows_fallback_when_keyframe_data_missing(tmp_path: Path) -> None:
     video_id = "demo_video"
     output_dir = tmp_path / "outputs" / video_id
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -167,8 +167,10 @@ def test_summarization_service_raises_for_missing_keyframe_data(tmp_path: Path) 
     (output_dir / "visual_detection.json").write_text(json.dumps({"detections": [{"timestamp": 1.0, "label": "car", "confidence": 0.8}]}), encoding="utf-8")
 
     with patch("app.services.summarization_service.get_project_root", return_value=tmp_path):
-        with pytest.raises(MissingSummaryDataError, match="Key-frame"):
-            summarize_video(video_id=video_id)
+        result = summarize_video(video_id=video_id)
+
+    assert result["video_id"] == video_id
+    assert result["summary_text"]
 
 
 def test_summarization_service_rejects_invalid_summary_length(tmp_path: Path) -> None:
@@ -191,3 +193,117 @@ def test_summarization_service_rejects_invalid_target_duration(tmp_path: Path) -
 
         with pytest.raises(InvalidSummaryRequestError, match="target_duration"):
             summarize_video(video_id=video_id, target_duration=5000)
+
+
+def test_summarization_service_falls_back_to_transcription_when_transcript_missing(tmp_path: Path) -> None:
+    video_id = "demo_video"
+    output_dir = tmp_path / "outputs" / video_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    (output_dir / "visual_detection.json").write_text(
+        json.dumps(
+            {"video_id": video_id, "detections": [{"timestamp": 0.0, "label": "person", "confidence": 0.9}]}
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "keyframes.json").write_text(
+        json.dumps(
+            {
+                "video_id": video_id,
+                "selected_frames": [
+                    {
+                        "frame_filename": "frame_000001.jpg",
+                        "timestamp": 0.0,
+                        "importance_score": 8.1,
+                        "detected_objects": ["person"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "moderation.json").write_text(json.dumps({"moderation_events": []}), encoding="utf-8")
+
+    with patch("app.services.summarization_service.get_project_root", return_value=tmp_path), patch(
+        "app.services.summarization_service.transcribe_video_audio",
+        return_value={
+            "segments": [
+                {"start": 0.0, "end": 5.0, "text": "A person walks near a car and a warning sign."},
+                {"start": 8.0, "end": 12.0, "text": "A truck is moving quickly on the road."},
+            ]
+        },
+    ) as mock_transcribe:
+        result = summarize_video(video_id=video_id, summary_length="short")
+
+    assert result["video_id"] == video_id
+    assert result["summary_length"] == "short"
+    assert result["summary_text"]
+    assert result["number_of_segments"] >= 1
+    mock_transcribe.assert_called_once_with(video_id=video_id)
+
+
+def test_summarization_service_rejects_unknown_video_id(tmp_path: Path) -> None:
+    with patch("app.services.summarization_service.get_project_root", return_value=tmp_path):
+        with pytest.raises(FileNotFoundError, match="not found"):
+            summarize_video(video_id="unknown_video")
+
+
+def test_summarization_service_persists_transcript_after_fallback(tmp_path: Path) -> None:
+    video_id = "demo_video"
+    output_dir = tmp_path / "outputs" / video_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    (output_dir / "visual_detection.json").write_text(
+        json.dumps({"video_id": video_id, "detections": [{"timestamp": 0.0, "label": "person", "confidence": 0.9}]}),
+        encoding="utf-8",
+    )
+    (output_dir / "keyframes.json").write_text(
+        json.dumps({"video_id": video_id, "selected_frames": [{"frame_filename": "frame_000001.jpg", "timestamp": 0.0, "importance_score": 8.1, "detected_objects": ["person"]}]}),
+        encoding="utf-8",
+    )
+    (output_dir / "moderation.json").write_text(json.dumps({"moderation_events": []}), encoding="utf-8")
+
+    with patch("app.services.summarization_service.get_project_root", return_value=tmp_path), patch(
+        "app.services.summarization_service.transcribe_video_audio",
+        return_value={
+            "segments": [
+                {"start": 0.0, "end": 5.0, "text": "A person walks near a car and a warning sign."},
+            ]
+        },
+    ) as mock_transcribe:
+        first = summarize_video(video_id=video_id, summary_length="short")
+        second = summarize_video(video_id=video_id, summary_length="medium")
+
+    assert first["summary_text"]
+    assert second["summary_text"]
+    assert (output_dir / "transcript.json").exists()
+    assert (output_dir / "transcript.json").read_text(encoding="utf-8")
+    assert mock_transcribe.call_count == 1
+
+
+def test_summarization_service_reuses_cached_visual_detection_and_keyframes(tmp_path: Path) -> None:
+    video_id = "demo_video"
+    output_dir = tmp_path / "outputs" / video_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    transcript_payload = {
+        "video_id": video_id,
+        "segments": [
+            {"start": 0.0, "end": 10.0, "text": "A person walks near a car and a warning signal."},
+            {"start": 15.0, "end": 20.0, "text": "A truck moves quickly on the road."},
+        ],
+    }
+    (output_dir / "transcript.json").write_text(json.dumps(transcript_payload), encoding="utf-8")
+    detection_payload = {"video_id": video_id, "detections": [{"timestamp": 0.0, "label": "person", "confidence": 0.9}]}
+    keyframe_payload = {"video_id": video_id, "selected_frames": [{"frame_filename": "frame_000001.jpg", "timestamp": 0.0, "importance_score": 8.1, "detected_objects": ["person"]}]}
+    (output_dir / "visual_detection.json").write_text(json.dumps(detection_payload), encoding="utf-8")
+    (output_dir / "keyframes.json").write_text(json.dumps(keyframe_payload), encoding="utf-8")
+
+    with patch("app.services.summarization_service.get_project_root", return_value=tmp_path), patch(
+        "app.services.summarization_service.process_video_visual_detection"
+    ) as mock_detection, patch("app.services.summarization_service.select_keyframes_for_video") as mock_keyframes:
+        summarize_video(video_id=video_id, summary_length="short")
+        summarize_video(video_id=video_id, summary_length="long")
+
+    mock_detection.assert_not_called()
+    mock_keyframes.assert_not_called()

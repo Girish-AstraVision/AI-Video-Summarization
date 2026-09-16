@@ -53,6 +53,13 @@ def test_summary_route_validates_target_duration() -> None:
     assert "target_duration" in response.json()["detail"]
 
 
+def test_summary_route_returns_404_for_unknown_video() -> None:
+    response = client.post("/api/videos/definitely_missing_video/summarize", json={"summary_length": "medium"})
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
 def test_summary_route_handles_missing_data() -> None:
     with patch(
         "app.api.routes.summarization.summarize_video",

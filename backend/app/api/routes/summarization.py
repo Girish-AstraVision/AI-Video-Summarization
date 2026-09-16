@@ -39,6 +39,11 @@ async def summarize_video_route(video_id: str, payload: SummarizeVideoRequest | 
             target_duration=request.target_duration,
         )
         return result
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except MissingSummaryDataError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -14,7 +14,14 @@ import { EventTimeline } from './components/timeline/EventTimeline';
 import { VisualDetectionPanel } from './components/visual/VisualDetectionPanel';
 import { SpeechTranscriptPanel } from './components/speech/SpeechTranscriptPanel';
 import { overviewCards, timelineEvents } from './data/mockData';
-import { detectVisualObjects, generateChapters, getKeyFrames, moderateVideo, transcribeVideo } from './services/api';
+import {
+  detectVisualObjects,
+  generateChapters,
+  getKeyFrames,
+  moderateVideo,
+  summarizeVideo,
+  transcribeVideo,
+} from './services/api';
 import type {
   ChapterResponse,
   KeyFrameSelectionResult,
@@ -22,6 +29,7 @@ import type {
   PreprocessingResult,
   PreprocessingState,
   SpeechToTextResult,
+  SummarizeVideoResponse,
   VisualDetectionResult,
 } from './types/api';
 import type { ProcessingStep } from './types/dashboard';
@@ -42,6 +50,10 @@ function App() {
   const [chapterState, setChapterState] = useState<PreprocessingState>('idle');
   const [chapterResult, setChapterResult] = useState<ChapterResponse | null>(null);
   const [chapterError, setChapterError] = useState<string | null>(null);
+  const [summarizationState, setSummarizationState] = useState<PreprocessingState>('idle');
+  const [summarizationResult, setSummarizationResult] = useState<SummarizeVideoResponse | null>(null);
+  const [summarizationError, setSummarizationError] = useState<string | null>(null);
+  const [selectedSummaryLength, setSelectedSummaryLength] = useState<'short' | 'medium' | 'long'>('medium');
   const [moderationState, setModerationState] = useState<PreprocessingState>('idle');
   const [moderationResult, setModerationResult] = useState<ModerationResult | null>(null);
   const [moderationError, setModerationError] = useState<string | null>(null);
@@ -199,6 +211,18 @@ function App() {
             ? 'Failed'
             : 'Pending';
 
+    const summarizationValue =
+      summarizationState === 'in-progress' ? 72 : summarizationState === 'complete' ? 100 : summarizationState === 'failed' ? 35 : 0;
+
+    const summarizationStatus =
+      summarizationState === 'in-progress'
+        ? 'In Progress'
+        : summarizationState === 'complete'
+          ? 'Complete'
+          : summarizationState === 'failed'
+            ? 'Failed'
+            : 'Pending';
+
     const keyFrameAnalysisValue =
       keyFrameState === 'in-progress' ? 72 : keyFrameState === 'complete' ? 100 : keyFrameState === 'failed' ? 35 : 0;
 
@@ -230,10 +254,10 @@ function App() {
       { name: 'Speech Analysis', status: speechAnalysisStatus, value: speechAnalysisValue },
       { name: 'Key Frame Selection', status: keyFrameAnalysisStatus, value: keyFrameAnalysisValue },
       { name: 'Chapters', status: chapterAnalysisStatus, value: chapterAnalysisValue },
-      { name: 'Summarization', status: 'Pending', value: 0 },
+      { name: 'Summarization', status: summarizationStatus, value: summarizationValue },
       { name: 'Moderation', status: moderationAnalysisStatus, value: moderationAnalysisValue },
     ];
-  }, [chapterState, keyFrameState, moderationState, preprocessingState, speechToTextState, videoId, visualDetectionState]);
+  }, [chapterState, keyFrameState, moderationState, preprocessingState, speechToTextState, summarizationState, videoId, visualDetectionState]);
 
   const handleRunVisualAnalysis = async () => {
     if (!videoId) {
@@ -312,6 +336,27 @@ function App() {
       const message = error instanceof Error ? error.message : 'Chapter generation failed. Please try again.';
       setChapterError(message);
       setChapterState('failed');
+    }
+  };
+
+  const handleRunSummarization = async (length: 'short' | 'medium' | 'long' = selectedSummaryLength) => {
+    if (!videoId) {
+      setSummarizationError('Please upload a video before generating a summary.');
+      return;
+    }
+
+    setSelectedSummaryLength(length);
+    setSummarizationState('in-progress');
+    setSummarizationError(null);
+
+    try {
+      const result = await summarizeVideo(videoId, length);
+      setSummarizationResult(result);
+      setSummarizationState('complete');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Summary generation failed. Please try again.';
+      setSummarizationError(message);
+      setSummarizationState('failed');
     }
   };
 
@@ -500,7 +545,14 @@ function App() {
           ) : null}
 
           <section className="summary-grid">
-            <SummaryPanel />
+            <SummaryPanel
+              videoId={videoId}
+              result={summarizationResult}
+              error={summarizationError}
+              state={summarizationState}
+              selectedLength={selectedSummaryLength}
+              onGenerate={handleRunSummarization}
+            />
           </section>
 
           {chapterResult ? (

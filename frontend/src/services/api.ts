@@ -6,6 +6,8 @@ import type {
   ModerationResult,
   PreprocessingResult,
   SpeechToTextResult,
+  SummarizeVideoRequest,
+  SummarizeVideoResponse,
   UploadVideoResponse,
   VisualDetectionResult,
 } from '../types/api';
@@ -282,6 +284,51 @@ export async function getKeyFrames(videoId: string, numKeyframes = 5): Promise<K
     }
 
     throw new Error('A network error occurred while selecting key frames.');
+  }
+}
+
+export async function summarizeVideo(
+  videoId: string,
+  summaryLength: 'short' | 'medium' | 'long' = 'medium',
+  targetDuration?: number,
+): Promise<SummarizeVideoResponse> {
+  const body: SummarizeVideoRequest = {
+    summary_length: summaryLength,
+    ...(typeof targetDuration === 'number' ? { target_duration: targetDuration } : {}),
+  };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/summarize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Video "${videoId}" was not found. Please upload it again.`);
+      }
+
+      if (response.status === 400) {
+        throw new Error('The summary request is invalid for this video, summary length, or target duration.');
+      }
+
+      if (response.status === 500) {
+        throw new Error('The backend encountered an error while generating the summary.');
+      }
+
+      throw new Error(`Summary generation failed with status ${response.status}. Please try again.`);
+    }
+
+    return (await response.json()) as SummarizeVideoResponse;
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('A network error occurred while generating the summary.');
   }
 }
 
