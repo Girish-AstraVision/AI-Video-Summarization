@@ -6,6 +6,8 @@ from typing import Any
 
 from faster_whisper import WhisperModel
 
+from app.services.video_service import get_project_root
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL_SIZE = "tiny"
@@ -33,10 +35,6 @@ class WhisperModelLoadError(SpeechToTextError):
 
 class SpeechTranscriptionError(SpeechToTextError):
     """Raised when audio transcription fails."""
-
-
-def get_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def get_audio_path_for_video(video_id: str) -> Path:

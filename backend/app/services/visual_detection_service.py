@@ -8,6 +8,8 @@ import torch
 from PIL import Image
 from transformers import RTDetrForObjectDetection, RTDetrImageProcessor
 
+from app.services.video_service import get_project_root
+
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "PekingU/rtdetr_r50vd_coco_o365"
@@ -26,10 +28,6 @@ class ModelLoadError(VisualDetectionError):
 
 class VideoFrameDetectionError(VisualDetectionError):
     """Raised when frame detection fails for a video."""
-
-
-def get_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def _get_device() -> torch.device:

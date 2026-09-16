@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from app.services.video_service import get_project_root
 from app.services.visual_detection_service import VideoFrameDetectionError, process_video_visual_detection
 
 logger = logging.getLogger(__name__)
@@ -28,10 +29,6 @@ class VisualDetectionRequiredError(KeyframeError):
 
 class InvalidKeyframeRequestError(KeyframeError):
     """Raised when a key-frame request is invalid."""
-
-
-def get_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def _read_metadata(video_id: str) -> dict[str, Any]:

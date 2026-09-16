@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.services.keyframe_service import MissingKeyframeDataError, select_keyframes_for_video
+from app.services.video_service import get_project_root
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +50,6 @@ class InvalidSummaryRequestError(SummarizationError):
 
 class MissingSummaryDataError(SummarizationError):
     """Raised when required speech or visual data is absent."""
-
-
-def get_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def _normalize_summary_length(summary_length: str | None) -> str:

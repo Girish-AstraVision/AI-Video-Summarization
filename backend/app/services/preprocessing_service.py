@@ -6,7 +6,7 @@ from typing import Any
 
 import cv2
 
-from app.services.video_service import get_upload_directory
+from app.services.video_service import get_project_root, get_upload_directory
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,6 @@ class OpenCVError(PreprocessingError):
 
 class VideoWithoutAudioError(PreprocessingError):
     """Raised when the input video does not contain audio."""
-
-
-def get_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def get_output_directory(video_id: str) -> Path:

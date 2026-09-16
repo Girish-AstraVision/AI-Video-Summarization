@@ -6,6 +6,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from app.services.video_service import get_project_root
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_VISUAL_WINDOW_SECONDS = 3.0
@@ -22,10 +24,6 @@ class InvalidTimelineRequestError(EventTimelineError):
 
 class MissingTimelineDataError(EventTimelineError):
     """Raised when required analysis data is missing."""
-
-
-def get_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def _read_json(path: Path, description: str, video_id: str) -> dict[str, Any]:
