@@ -167,6 +167,7 @@ uploads/*
 !uploads/.gitkeep
 outputs/*
 !outputs/.gitkeep
+local setup/.runtime/
 
 # Spyder project settings
 .spyderproject
