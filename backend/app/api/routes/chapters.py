@@ -24,6 +24,13 @@ async def create_chapters_route(video_id: str, payload: ChapterRequest | None = 
             from app.services.chapter_service import validate_max_chapters
 
             validate_max_chapters(max_chapters)
+        logger.info(
+            "chapter route: video_id=%s cwd=%s upload_dir=%s resolved_matches=%s",
+            video_id,
+            __import__('pathlib').Path.cwd(),
+            __import__('app.services.video_service', fromlist=['get_upload_directory']).get_upload_directory(),
+            sorted(str(p.name) for p in __import__('app.services.video_service', fromlist=['get_upload_directory']).get_upload_directory().glob(f"{video_id}.*")),
+        )
         result = create_video_chapters(video_id=video_id, max_chapters=max_chapters)
         return result
     except MissingChapterDataError as exc:

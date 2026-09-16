@@ -77,6 +77,34 @@ export interface ModerationResult {
   moderation_events: ModerationEvent[];
 }
 
+export interface ChapterKeyFrame {
+  frame_filename: string;
+  timestamp: number;
+  importance_score: number;
+}
+
+export interface ImportantObject {
+  label: string;
+  confidence: number;
+}
+
+export interface ChapterItem {
+  chapter_number: number;
+  start_time: number;
+  end_time: number;
+  title: string;
+  summary: string;
+  key_frames: ChapterKeyFrame[];
+  important_objects: ImportantObject[];
+}
+
+export interface ChapterResponse {
+  video_id: string;
+  number_of_chapters: number;
+  chapters: ChapterItem[];
+  processing_time: number;
+}
+
 export interface SelectedFrame {
   frame_filename: string;
   timestamp: number;

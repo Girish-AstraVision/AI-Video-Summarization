@@ -13,9 +13,10 @@ import { ModerationPanel } from './components/moderation/ModerationPanel';
 import { EventTimeline } from './components/timeline/EventTimeline';
 import { VisualDetectionPanel } from './components/visual/VisualDetectionPanel';
 import { SpeechTranscriptPanel } from './components/speech/SpeechTranscriptPanel';
-import { chapterItems, overviewCards, timelineEvents } from './data/mockData';
-import { detectVisualObjects, getKeyFrames, moderateVideo, transcribeVideo } from './services/api';
+import { overviewCards, timelineEvents } from './data/mockData';
+import { detectVisualObjects, generateChapters, getKeyFrames, moderateVideo, transcribeVideo } from './services/api';
 import type {
+  ChapterResponse,
   KeyFrameSelectionResult,
   ModerationResult,
   PreprocessingResult,
@@ -38,6 +39,9 @@ function App() {
   const [keyFrameState, setKeyFrameState] = useState<PreprocessingState>('idle');
   const [keyFrameResult, setKeyFrameResult] = useState<KeyFrameSelectionResult | null>(null);
   const [keyFrameError, setKeyFrameError] = useState<string | null>(null);
+  const [chapterState, setChapterState] = useState<PreprocessingState>('idle');
+  const [chapterResult, setChapterResult] = useState<ChapterResponse | null>(null);
+  const [chapterError, setChapterError] = useState<string | null>(null);
   const [moderationState, setModerationState] = useState<PreprocessingState>('idle');
   const [moderationResult, setModerationResult] = useState<ModerationResult | null>(null);
   const [moderationError, setModerationError] = useState<string | null>(null);
@@ -97,6 +101,21 @@ function App() {
     return { value: 'Not analyzed', detail: 'Not analyzed' };
   }, [keyFrameResult, keyFrameState]);
 
+  const chapterSummary = useMemo(() => {
+    if (chapterState === 'in-progress') {
+      return { value: 'Analyzing...', detail: 'Grouping moments into chapters...' };
+    }
+
+    if (chapterState === 'complete' && chapterResult) {
+      return {
+        value: String(chapterResult.number_of_chapters),
+        detail: chapterResult.number_of_chapters === 1 ? '1 generated chapter' : `${chapterResult.number_of_chapters} generated chapters`,
+      };
+    }
+
+    return { value: 'Not analyzed', detail: 'Not analyzed' };
+  }, [chapterResult, chapterState]);
+
   const overviewItems = useMemo(
     () => [
       overviewCards[0],
@@ -118,8 +137,14 @@ function App() {
         detail: keyFrameSummary.detail,
         tone: 'amber' as const,
       },
+      {
+        label: 'Chapters',
+        value: chapterSummary.value,
+        detail: chapterSummary.detail,
+        tone: 'blue' as const,
+      },
     ],
-    [keyFrameSummary, objectSummary, speechSummary],
+    [chapterSummary, keyFrameSummary, objectSummary, speechSummary],
   );
 
   const processingSteps = useMemo<ProcessingStep[]>(() => {
@@ -186,16 +211,29 @@ function App() {
             ? 'Failed'
             : 'Pending';
 
+    const chapterAnalysisValue =
+      chapterState === 'in-progress' ? 72 : chapterState === 'complete' ? 100 : chapterState === 'failed' ? 35 : 0;
+
+    const chapterAnalysisStatus =
+      chapterState === 'in-progress'
+        ? 'In Progress'
+        : chapterState === 'complete'
+          ? 'Complete'
+          : chapterState === 'failed'
+            ? 'Failed'
+            : 'Pending';
+
     return [
       { name: 'Upload', status: uploadStatus, value: uploadValue },
       { name: 'Preprocessing', status: preprocessingStatus, value: preprocessingValue },
       { name: 'Visual Analysis', status: visualAnalysisStatus, value: visualAnalysisValue },
       { name: 'Speech Analysis', status: speechAnalysisStatus, value: speechAnalysisValue },
       { name: 'Key Frame Selection', status: keyFrameAnalysisStatus, value: keyFrameAnalysisValue },
+      { name: 'Chapters', status: chapterAnalysisStatus, value: chapterAnalysisValue },
       { name: 'Summarization', status: 'Pending', value: 0 },
       { name: 'Moderation', status: moderationAnalysisStatus, value: moderationAnalysisValue },
     ];
-  }, [keyFrameState, moderationState, preprocessingState, speechToTextState, videoId, visualDetectionState]);
+  }, [chapterState, keyFrameState, moderationState, preprocessingState, speechToTextState, videoId, visualDetectionState]);
 
   const handleRunVisualAnalysis = async () => {
     if (!videoId) {
@@ -254,6 +292,26 @@ function App() {
       const message = error instanceof Error ? error.message : 'Key-frame selection failed. Please try again.';
       setKeyFrameError(message);
       setKeyFrameState('failed');
+    }
+  };
+
+  const handleRunChapterAnalysis = async () => {
+    if (!videoId) {
+      setChapterError('Please upload a video before generating chapters.');
+      return;
+    }
+
+    setChapterState('in-progress');
+    setChapterError(null);
+
+    try {
+      const result = await generateChapters(videoId, 5);
+      setChapterResult(result);
+      setChapterState('complete');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Chapter generation failed. Please try again.';
+      setChapterError(message);
+      setChapterState('failed');
     }
   };
 
@@ -369,6 +427,24 @@ function App() {
           ) : null}
 
           {preprocessingState === 'complete' ? (
+            <section className="panel analysis-controls-panel" aria-label="Chapter analysis controls">
+              <div className="analysis-controls-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    void handleRunChapterAnalysis();
+                  }}
+                  disabled={chapterState === 'in-progress'}
+                >
+                  {chapterState === 'in-progress' ? 'Generating chapters...' : 'Run Chapter Analysis'}
+                </button>
+              </div>
+              {chapterError ? <div className="upload-message error-message">{chapterError}</div> : null}
+            </section>
+          ) : null}
+
+          {preprocessingState === 'complete' ? (
             <section className="panel analysis-controls-panel" aria-label="Moderation analysis controls">
               <div className="analysis-controls-row">
                 <button
@@ -427,10 +503,16 @@ function App() {
             <SummaryPanel />
           </section>
 
-          <section className="content-grid two-column">
-            <ChapterList chapters={chapterItems} />
-            <EventTimeline events={timelineEvents} />
-          </section>
+          {chapterResult ? (
+            <section className="content-grid two-column">
+              <ChapterList result={chapterResult} onTimestampClick={handleTimestampSeek} isVisible={chapterState !== 'idle'} />
+              <EventTimeline events={timelineEvents} />
+            </section>
+          ) : (
+            <section className="content-grid two-column">
+              <EventTimeline events={timelineEvents} />
+            </section>
+          )}
 
           {preprocessingResult ? (
             <section className="panel preprocessing-result-panel" aria-live="polite">

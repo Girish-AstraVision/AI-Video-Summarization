@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config/env';
 import type {
   ApiHealthResponse,
+  ChapterResponse,
   KeyFrameSelectionResult,
   ModerationResult,
   PreprocessingResult,
@@ -212,6 +213,42 @@ export async function moderateVideo(videoId: string): Promise<ModerationResult> 
     }
 
     throw new Error('A network error occurred while running content moderation.');
+  }
+}
+
+export async function generateChapters(videoId: string, maxChapters = 5): Promise<ChapterResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/chapters`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ max_chapters: maxChapters }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Video "${videoId}" was not found. Please upload it again.`);
+      }
+
+      if (response.status === 400) {
+        throw new Error('The chapter-generation request is invalid for this video or chapter count.');
+      }
+
+      if (response.status === 500) {
+        throw new Error('The backend encountered an error while generating chapters.');
+      }
+
+      throw new Error(`Chapter generation failed with status ${response.status}. Please try again.`);
+    }
+
+    return (await response.json()) as ChapterResponse;
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('A network error occurred while generating chapters.');
   }
 }
 

@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from app.services.keyframe_service import MissingKeyframeDataError, select_keyframes_for_video
+from app.services.speech_to_text_service import transcribe_video_audio
+from app.services.video_service import get_project_root
+from app.services.visual_detection_service import process_video_visual_detection
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +93,6 @@ class MissingChapterDataError(ChapterError):
     """Raised when required transcript or visual data is absent."""
 
 
-def get_project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
 def validate_max_chapters(max_chapters: int | None) -> int:
     if max_chapters is None:
         return DEFAULT_MAX_CHAPTERS
@@ -123,8 +122,25 @@ def _read_json(path: Path, description: str, video_id: str) -> dict[str, Any]:
 
 def load_transcript_data(video_id: str) -> list[dict[str, Any]]:
     transcript_path = get_project_root() / "outputs" / video_id / "transcript.json"
-    payload = _read_json(transcript_path, "Transcript data", video_id)
-    segments = payload.get("segments") or payload.get("transcript_segments") or []
+    if transcript_path.exists():
+        payload = _read_json(transcript_path, "Transcript data", video_id)
+        segments = payload.get("segments") or payload.get("transcript_segments") or []
+        if not isinstance(segments, list) or not segments:
+            raise MissingChapterDataError(f"Transcript segments are missing for video_id '{video_id}'.")
+        return segments
+
+    logger.info(
+        "Transcript artifact missing for video_id=%s; generating from speech service. cwd=%s transcript_path=%s",
+        video_id,
+        Path.cwd(),
+        transcript_path,
+    )
+    try:
+        transcript_payload = transcribe_video_audio(video_id=video_id)
+    except Exception as exc:
+        raise MissingChapterDataError(f"Transcript data not found for video_id '{video_id}'.") from exc
+
+    segments = transcript_payload.get("segments") or []
     if not isinstance(segments, list) or not segments:
         raise MissingChapterDataError(f"Transcript segments are missing for video_id '{video_id}'.")
     return segments
@@ -132,8 +148,25 @@ def load_transcript_data(video_id: str) -> list[dict[str, Any]]:
 
 def load_visual_detection_data(video_id: str) -> list[dict[str, Any]]:
     detection_path = get_project_root() / "outputs" / video_id / "visual_detection.json"
-    payload = _read_json(detection_path, "Visual detection data", video_id)
-    detections = payload.get("detections", [])
+    if detection_path.exists():
+        payload = _read_json(detection_path, "Visual detection data", video_id)
+        detections = payload.get("detections", [])
+        if not isinstance(detections, list) or not detections:
+            raise MissingChapterDataError(f"RT-DETR detection data is missing for video_id '{video_id}'.")
+        return detections
+
+    logger.info(
+        "Visual detection artifact missing for video_id=%s; generating from detection service. cwd=%s detection_path=%s",
+        video_id,
+        Path.cwd(),
+        detection_path,
+    )
+    try:
+        detection_payload = process_video_visual_detection(video_id=video_id)
+    except Exception as exc:
+        raise MissingChapterDataError(f"Visual detection data is missing for video_id '{video_id}'.") from exc
+
+    detections = detection_payload.get("detections", [])
     if not isinstance(detections, list) or not detections:
         raise MissingChapterDataError(f"RT-DETR detection data is missing for video_id '{video_id}'.")
     return detections
