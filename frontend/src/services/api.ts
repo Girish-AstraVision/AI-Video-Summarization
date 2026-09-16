@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config/env';
 import type {
   ApiHealthResponse,
+  ModerationResult,
   PreprocessingResult,
   SpeechToTextResult,
   UploadVideoResponse,
@@ -178,6 +179,38 @@ export async function transcribeVideo(videoId: string): Promise<SpeechToTextResu
     }
 
     throw new Error('A network error occurred while running Whisper speech analysis.');
+  }
+}
+
+export async function moderateVideo(videoId: string): Promise<ModerationResult> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/moderate`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Video "${videoId}" was not found. Please upload it again.`);
+      }
+
+      if (response.status === 400) {
+        throw new Error('The moderation request is invalid for this video.');
+      }
+
+      if (response.status === 500) {
+        throw new Error('The backend encountered an error while running content moderation.');
+      }
+
+      throw new Error(`Moderation failed with status ${response.status}. Please try again.`);
+    }
+
+    return (await response.json()) as ModerationResult;
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('A network error occurred while running content moderation.');
   }
 }
 

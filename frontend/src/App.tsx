@@ -13,9 +13,9 @@ import { ModerationPanel } from './components/moderation/ModerationPanel';
 import { EventTimeline } from './components/timeline/EventTimeline';
 import { VisualDetectionPanel } from './components/visual/VisualDetectionPanel';
 import { SpeechTranscriptPanel } from './components/speech/SpeechTranscriptPanel';
-import { chapterItems, keyFrameItems, moderationItems, overviewCards, timelineEvents } from './data/mockData';
-import { detectVisualObjects, transcribeVideo } from './services/api';
-import type { PreprocessingResult, PreprocessingState, SpeechToTextResult, VisualDetectionResult } from './types/api';
+import { chapterItems, keyFrameItems, overviewCards, timelineEvents } from './data/mockData';
+import { detectVisualObjects, moderateVideo, transcribeVideo } from './services/api';
+import type { ModerationResult, PreprocessingResult, PreprocessingState, SpeechToTextResult, VisualDetectionResult } from './types/api';
 import type { ProcessingStep } from './types/dashboard';
 
 function App() {
@@ -28,6 +28,9 @@ function App() {
   const [speechToTextState, setSpeechToTextState] = useState<PreprocessingState>('idle');
   const [speechToTextResult, setSpeechToTextResult] = useState<SpeechToTextResult | null>(null);
   const [speechToTextError, setSpeechToTextError] = useState<string | null>(null);
+  const [moderationState, setModerationState] = useState<PreprocessingState>('idle');
+  const [moderationResult, setModerationResult] = useState<ModerationResult | null>(null);
+  const [moderationError, setModerationError] = useState<string | null>(null);
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
 
   const objectSummary = useMemo(() => {
@@ -69,6 +72,21 @@ function App() {
     return { value: 'Not analyzed', detail: 'Not analyzed' };
   }, [speechToTextResult, speechToTextState]);
 
+  const moderationSummary = useMemo(() => {
+    if (moderationState === 'in-progress') {
+      return { value: 'Analyzing...', detail: 'Checking transcript content...' };
+    }
+
+    if (moderationState === 'complete' && moderationResult) {
+      return {
+        value: String(moderationResult.total_events),
+        detail: moderationResult.total_events === 0 ? 'No moderation alerts' : `${moderationResult.total_events} flagged events`,
+      };
+    }
+
+    return { value: 'Not analyzed', detail: 'Not analyzed' };
+  }, [moderationResult, moderationState]);
+
   const overviewItems = useMemo(
     () => [
       overviewCards[0],
@@ -84,9 +102,14 @@ function App() {
         detail: speechSummary.detail,
         tone: 'teal' as const,
       },
-      overviewCards[3],
+      {
+        label: 'Moderation Alerts',
+        value: moderationSummary.value,
+        detail: moderationSummary.detail,
+        tone: 'amber' as const,
+      },
     ],
-    [objectSummary, speechSummary],
+    [moderationSummary, objectSummary, speechSummary],
   );
 
   const processingSteps = useMemo<ProcessingStep[]>(() => {
@@ -129,15 +152,27 @@ function App() {
             ? 'Failed'
             : 'Pending';
 
+    const moderationAnalysisValue =
+      moderationState === 'in-progress' ? 72 : moderationState === 'complete' ? 100 : moderationState === 'failed' ? 35 : 0;
+
+    const moderationAnalysisStatus =
+      moderationState === 'in-progress'
+        ? 'In Progress'
+        : moderationState === 'complete'
+          ? 'Complete'
+          : moderationState === 'failed'
+            ? 'Failed'
+            : 'Pending';
+
     return [
       { name: 'Upload', status: uploadStatus, value: uploadValue },
       { name: 'Preprocessing', status: preprocessingStatus, value: preprocessingValue },
       { name: 'Visual Analysis', status: visualAnalysisStatus, value: visualAnalysisValue },
       { name: 'Speech Analysis', status: speechAnalysisStatus, value: speechAnalysisValue },
       { name: 'Summarization', status: 'Pending', value: 0 },
-      { name: 'Moderation', status: 'Pending', value: 0 },
+      { name: 'Moderation', status: moderationAnalysisStatus, value: moderationAnalysisValue },
     ];
-  }, [preprocessingState, speechToTextState, videoId, visualDetectionState]);
+  }, [moderationState, preprocessingState, speechToTextState, videoId, visualDetectionState]);
 
   const handleRunVisualAnalysis = async () => {
     if (!videoId) {
@@ -176,6 +211,26 @@ function App() {
       const message = error instanceof Error ? error.message : 'Whisper speech analysis failed. Please try again.';
       setSpeechToTextError(message);
       setSpeechToTextState('failed');
+    }
+  };
+
+  const handleRunModerationAnalysis = async () => {
+    if (!videoId) {
+      setModerationError('Please upload a video before running moderation analysis.');
+      return;
+    }
+
+    setModerationState('in-progress');
+    setModerationError(null);
+
+    try {
+      const result = await moderateVideo(videoId);
+      setModerationResult(result);
+      setModerationState('complete');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Content moderation failed. Please try again.';
+      setModerationError(message);
+      setModerationState('failed');
     }
   };
 
@@ -252,6 +307,24 @@ function App() {
             </section>
           ) : null}
 
+          {preprocessingState === 'complete' ? (
+            <section className="panel analysis-controls-panel" aria-label="Moderation analysis controls">
+              <div className="analysis-controls-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    void handleRunModerationAnalysis();
+                  }}
+                  disabled={moderationState === 'in-progress'}
+                >
+                  {moderationState === 'in-progress' ? 'Running content moderation...' : 'Run Moderation Check'}
+                </button>
+              </div>
+              {moderationError ? <div className="upload-message error-message">{moderationError}</div> : null}
+            </section>
+          ) : null}
+
           <section className="workspace-grid">
             <VideoWorkspace videoId={videoId} seekToTime={seekToTime} onSeekHandled={() => setSeekToTime(null)} />
             <ProcessingStatus steps={processingSteps} />
@@ -273,6 +346,14 @@ function App() {
             />
           ) : null}
 
+          {moderationResult ? (
+            <ModerationPanel
+              result={moderationResult}
+              onTimestampClick={handleTimestampSeek}
+              isVisible={moderationState !== 'idle'}
+            />
+          ) : null}
+
           <section className="summary-grid">
             <SummaryPanel />
           </section>
@@ -283,7 +364,6 @@ function App() {
           </section>
 
           <section className="content-grid two-column">
-            <ModerationPanel items={moderationItems} />
             <EventTimeline events={timelineEvents} />
           </section>
 

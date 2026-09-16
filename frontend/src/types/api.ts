@@ -59,6 +59,24 @@ export interface VisualDetectionResult {
   model_name: string;
 }
 
+export interface ModerationEvent {
+  video_id: string;
+  timestamp: number;
+  start_time: number;
+  end_time: number;
+  category: string;
+  severity: string;
+  confidence: number;
+  text: string;
+  message: string;
+}
+
+export interface ModerationResult {
+  video_id: string;
+  total_events: number;
+  moderation_events: ModerationEvent[];
+}
+
 export interface SpeechSegment {
   segment_number: number;
   start: number;
