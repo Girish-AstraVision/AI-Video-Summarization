@@ -13,9 +13,16 @@ import { ModerationPanel } from './components/moderation/ModerationPanel';
 import { EventTimeline } from './components/timeline/EventTimeline';
 import { VisualDetectionPanel } from './components/visual/VisualDetectionPanel';
 import { SpeechTranscriptPanel } from './components/speech/SpeechTranscriptPanel';
-import { chapterItems, keyFrameItems, overviewCards, timelineEvents } from './data/mockData';
-import { detectVisualObjects, moderateVideo, transcribeVideo } from './services/api';
-import type { ModerationResult, PreprocessingResult, PreprocessingState, SpeechToTextResult, VisualDetectionResult } from './types/api';
+import { chapterItems, overviewCards, timelineEvents } from './data/mockData';
+import { detectVisualObjects, getKeyFrames, moderateVideo, transcribeVideo } from './services/api';
+import type {
+  KeyFrameSelectionResult,
+  ModerationResult,
+  PreprocessingResult,
+  PreprocessingState,
+  SpeechToTextResult,
+  VisualDetectionResult,
+} from './types/api';
 import type { ProcessingStep } from './types/dashboard';
 
 function App() {
@@ -28,6 +35,9 @@ function App() {
   const [speechToTextState, setSpeechToTextState] = useState<PreprocessingState>('idle');
   const [speechToTextResult, setSpeechToTextResult] = useState<SpeechToTextResult | null>(null);
   const [speechToTextError, setSpeechToTextError] = useState<string | null>(null);
+  const [keyFrameState, setKeyFrameState] = useState<PreprocessingState>('idle');
+  const [keyFrameResult, setKeyFrameResult] = useState<KeyFrameSelectionResult | null>(null);
+  const [keyFrameError, setKeyFrameError] = useState<string | null>(null);
   const [moderationState, setModerationState] = useState<PreprocessingState>('idle');
   const [moderationResult, setModerationResult] = useState<ModerationResult | null>(null);
   const [moderationError, setModerationError] = useState<string | null>(null);
@@ -72,20 +82,20 @@ function App() {
     return { value: 'Not analyzed', detail: 'Not analyzed' };
   }, [speechToTextResult, speechToTextState]);
 
-  const moderationSummary = useMemo(() => {
-    if (moderationState === 'in-progress') {
-      return { value: 'Analyzing...', detail: 'Checking transcript content...' };
+  const keyFrameSummary = useMemo(() => {
+    if (keyFrameState === 'in-progress') {
+      return { value: 'Analyzing...', detail: 'Selecting most relevant frames...' };
     }
 
-    if (moderationState === 'complete' && moderationResult) {
+    if (keyFrameState === 'complete' && keyFrameResult) {
       return {
-        value: String(moderationResult.total_events),
-        detail: moderationResult.total_events === 0 ? 'No moderation alerts' : `${moderationResult.total_events} flagged events`,
+        value: String(keyFrameResult.number_selected),
+        detail: `From ${keyFrameResult.total_frames_analyzed} analyzed frames`,
       };
     }
 
     return { value: 'Not analyzed', detail: 'Not analyzed' };
-  }, [moderationResult, moderationState]);
+  }, [keyFrameResult, keyFrameState]);
 
   const overviewItems = useMemo(
     () => [
@@ -103,13 +113,13 @@ function App() {
         tone: 'teal' as const,
       },
       {
-        label: 'Moderation Alerts',
-        value: moderationSummary.value,
-        detail: moderationSummary.detail,
+        label: 'Key Frames',
+        value: keyFrameSummary.value,
+        detail: keyFrameSummary.detail,
         tone: 'amber' as const,
       },
     ],
-    [moderationSummary, objectSummary, speechSummary],
+    [keyFrameSummary, objectSummary, speechSummary],
   );
 
   const processingSteps = useMemo<ProcessingStep[]>(() => {
@@ -164,15 +174,28 @@ function App() {
             ? 'Failed'
             : 'Pending';
 
+    const keyFrameAnalysisValue =
+      keyFrameState === 'in-progress' ? 72 : keyFrameState === 'complete' ? 100 : keyFrameState === 'failed' ? 35 : 0;
+
+    const keyFrameAnalysisStatus =
+      keyFrameState === 'in-progress'
+        ? 'In Progress'
+        : keyFrameState === 'complete'
+          ? 'Complete'
+          : keyFrameState === 'failed'
+            ? 'Failed'
+            : 'Pending';
+
     return [
       { name: 'Upload', status: uploadStatus, value: uploadValue },
       { name: 'Preprocessing', status: preprocessingStatus, value: preprocessingValue },
       { name: 'Visual Analysis', status: visualAnalysisStatus, value: visualAnalysisValue },
       { name: 'Speech Analysis', status: speechAnalysisStatus, value: speechAnalysisValue },
+      { name: 'Key Frame Selection', status: keyFrameAnalysisStatus, value: keyFrameAnalysisValue },
       { name: 'Summarization', status: 'Pending', value: 0 },
       { name: 'Moderation', status: moderationAnalysisStatus, value: moderationAnalysisValue },
     ];
-  }, [moderationState, preprocessingState, speechToTextState, videoId, visualDetectionState]);
+  }, [keyFrameState, moderationState, preprocessingState, speechToTextState, videoId, visualDetectionState]);
 
   const handleRunVisualAnalysis = async () => {
     if (!videoId) {
@@ -211,6 +234,26 @@ function App() {
       const message = error instanceof Error ? error.message : 'Whisper speech analysis failed. Please try again.';
       setSpeechToTextError(message);
       setSpeechToTextState('failed');
+    }
+  };
+
+  const handleRunKeyFrameAnalysis = async () => {
+    if (!videoId) {
+      setKeyFrameError('Please upload a video before running key-frame selection.');
+      return;
+    }
+
+    setKeyFrameState('in-progress');
+    setKeyFrameError(null);
+
+    try {
+      const result = await getKeyFrames(videoId, 5);
+      setKeyFrameResult(result);
+      setKeyFrameState('complete');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Key-frame selection failed. Please try again.';
+      setKeyFrameError(message);
+      setKeyFrameState('failed');
     }
   };
 
@@ -308,6 +351,24 @@ function App() {
           ) : null}
 
           {preprocessingState === 'complete' ? (
+            <section className="panel analysis-controls-panel" aria-label="Key-frame analysis controls">
+              <div className="analysis-controls-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    void handleRunKeyFrameAnalysis();
+                  }}
+                  disabled={keyFrameState === 'in-progress'}
+                >
+                  {keyFrameState === 'in-progress' ? 'Selecting key frames...' : 'Run Key Frame Selection'}
+                </button>
+              </div>
+              {keyFrameError ? <div className="upload-message error-message">{keyFrameError}</div> : null}
+            </section>
+          ) : null}
+
+          {preprocessingState === 'complete' ? (
             <section className="panel analysis-controls-panel" aria-label="Moderation analysis controls">
               <div className="analysis-controls-row">
                 <button
@@ -346,6 +407,14 @@ function App() {
             />
           ) : null}
 
+          {keyFrameResult ? (
+            <KeyFrameGallery
+              result={keyFrameResult}
+              onTimestampClick={handleTimestampSeek}
+              isVisible={keyFrameState !== 'idle'}
+            />
+          ) : null}
+
           {moderationResult ? (
             <ModerationPanel
               result={moderationResult}
@@ -360,10 +429,6 @@ function App() {
 
           <section className="content-grid two-column">
             <ChapterList chapters={chapterItems} />
-            <KeyFrameGallery items={keyFrameItems} />
-          </section>
-
-          <section className="content-grid two-column">
             <EventTimeline events={timelineEvents} />
           </section>
 

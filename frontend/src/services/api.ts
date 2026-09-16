@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config/env';
 import type {
   ApiHealthResponse,
+  KeyFrameSelectionResult,
   ModerationResult,
   PreprocessingResult,
   SpeechToTextResult,
@@ -211,6 +212,39 @@ export async function moderateVideo(videoId: string): Promise<ModerationResult> 
     }
 
     throw new Error('A network error occurred while running content moderation.');
+  }
+}
+
+export async function getKeyFrames(videoId: string, numKeyframes = 5): Promise<KeyFrameSelectionResult> {
+  try {
+    const queryParams = new URLSearchParams({ num_keyframes: String(numKeyframes) });
+    const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/keyframes?${queryParams.toString()}`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Video "${videoId}" was not found. Please upload it again.`);
+      }
+
+      if (response.status === 400) {
+        throw new Error('The key-frame request is invalid for this video or frame count.');
+      }
+
+      if (response.status === 500) {
+        throw new Error('The backend encountered an error while selecting key frames.');
+      }
+
+      throw new Error(`Key-frame selection failed with status ${response.status}. Please try again.`);
+    }
+
+    return (await response.json()) as KeyFrameSelectionResult;
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('A network error occurred while selecting key frames.');
   }
 }
 

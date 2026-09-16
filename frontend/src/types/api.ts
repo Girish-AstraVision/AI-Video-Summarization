@@ -77,6 +77,21 @@ export interface ModerationResult {
   moderation_events: ModerationEvent[];
 }
 
+export interface SelectedFrame {
+  frame_filename: string;
+  timestamp: number;
+  importance_score: number;
+  detected_objects: string[];
+}
+
+export interface KeyFrameSelectionResult {
+  video_id: string;
+  total_frames_analyzed: number;
+  selected_frames: SelectedFrame[];
+  number_selected: number;
+  processing_time: number;
+}
+
 export interface SpeechSegment {
   segment_number: number;
   start: number;
