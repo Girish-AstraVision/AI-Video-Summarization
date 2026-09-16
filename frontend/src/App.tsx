@@ -13,10 +13,11 @@ import { ModerationPanel } from './components/moderation/ModerationPanel';
 import { EventTimeline } from './components/timeline/EventTimeline';
 import { VisualDetectionPanel } from './components/visual/VisualDetectionPanel';
 import { SpeechTranscriptPanel } from './components/speech/SpeechTranscriptPanel';
-import { overviewCards, timelineEvents } from './data/mockData';
+import { overviewCards } from './data/mockData';
 import {
   detectVisualObjects,
   generateChapters,
+  generateTimeline,
   getKeyFrames,
   moderateVideo,
   summarizeVideo,
@@ -24,6 +25,7 @@ import {
 } from './services/api';
 import type {
   ChapterResponse,
+  EventTimelineResponse,
   KeyFrameSelectionResult,
   ModerationResult,
   PreprocessingResult,
@@ -57,6 +59,9 @@ function App() {
   const [moderationState, setModerationState] = useState<PreprocessingState>('idle');
   const [moderationResult, setModerationResult] = useState<ModerationResult | null>(null);
   const [moderationError, setModerationError] = useState<string | null>(null);
+  const [timelineState, setTimelineState] = useState<PreprocessingState>('idle');
+  const [timelineResult, setTimelineResult] = useState<EventTimelineResponse | null>(null);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
 
   const objectSummary = useMemo(() => {
@@ -380,6 +385,26 @@ function App() {
     }
   };
 
+  const handleGenerateTimeline = async () => {
+    if (!videoId) {
+      setTimelineError('Please upload a video before generating the event timeline.');
+      return;
+    }
+
+    setTimelineState('in-progress');
+    setTimelineError(null);
+
+    try {
+      const result = await generateTimeline(videoId);
+      setTimelineResult(result);
+      setTimelineState('complete');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Timeline generation failed. Please try again.';
+      setTimelineError(message);
+      setTimelineState('failed');
+    }
+  };
+
   const handleTimestampSeek = (timestamp: number) => {
     setSeekToTime(timestamp);
   };
@@ -558,11 +583,23 @@ function App() {
           {chapterResult ? (
             <section className="content-grid two-column">
               <ChapterList result={chapterResult} onTimestampClick={handleTimestampSeek} isVisible={chapterState !== 'idle'} />
-              <EventTimeline events={timelineEvents} />
+              <EventTimeline
+                events={timelineResult?.events ?? []}
+                onTimestampClick={handleTimestampSeek}
+                isLoading={timelineState === 'in-progress'}
+                error={timelineError}
+                onRefresh={handleGenerateTimeline}
+              />
             </section>
           ) : (
             <section className="content-grid two-column">
-              <EventTimeline events={timelineEvents} />
+              <EventTimeline
+                events={timelineResult?.events ?? []}
+                onTimestampClick={handleTimestampSeek}
+                isLoading={timelineState === 'in-progress'}
+                error={timelineError}
+                onRefresh={handleGenerateTimeline}
+              />
             </section>
           )}
 

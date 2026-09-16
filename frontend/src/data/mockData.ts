@@ -4,7 +4,6 @@ import type {
   ModerationItem,
   OverviewCard,
   ProcessingStep,
-  TimelineEvent,
 } from '../types/dashboard';
 
 export const overviewCards: OverviewCard[] = [
@@ -33,14 +32,6 @@ export const moderationItems: ModerationItem[] = [
   { status: 'Safe Content', timestamp: '00:11', event: 'Object classification passed', severity: 'Low' },
   { status: 'Review Required', timestamp: '00:37', event: 'Sensitive phrase detected in speech', severity: 'Medium' },
   { status: 'Flagged Content', timestamp: '00:54', event: 'Potential restricted keyword match', severity: 'High' },
-];
-
-export const timelineEvents: TimelineEvent[] = [
-  { timestamp: '00:02', type: 'Visual', description: 'Person enters and focuses on the main object.' },
-  { timestamp: '00:12', type: 'Speech', description: 'Narrator introduces context and use case.' },
-  { timestamp: '00:18', type: 'Key Frame', description: 'Keyframe selected for product highlight.' },
-  { timestamp: '00:36', type: 'Moderation', description: 'Text moderation flag triggered by phrase review.' },
-  { timestamp: '00:51', type: 'Chapter', description: 'Chapter boundary created for closing summary.' },
 ];
 
 export const processingSteps: ProcessingStep[] = [

@@ -2,12 +2,14 @@ import { API_BASE_URL } from '../config/env';
 import type {
   ApiHealthResponse,
   ChapterResponse,
+  EventTimelineResponse,
   KeyFrameSelectionResult,
   ModerationResult,
   PreprocessingResult,
   SpeechToTextResult,
   SummarizeVideoRequest,
   SummarizeVideoResponse,
+  TimelineRequest,
   UploadVideoResponse,
   VisualDetectionResult,
 } from '../types/api';
@@ -329,6 +331,51 @@ export async function summarizeVideo(
     }
 
     throw new Error('A network error occurred while generating the summary.');
+  }
+}
+
+export async function generateTimeline(videoId: string, options: TimelineRequest = {}): Promise<EventTimelineResponse> {
+  const payload: TimelineRequest = {
+    include_visual: true,
+    include_speech: true,
+    include_moderation: true,
+    include_keyframes: true,
+    include_chapters: true,
+    ...options,
+  };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/timeline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Video "${videoId}" was not found. Please upload it again.`);
+      }
+
+      if (response.status === 400) {
+        throw new Error('The timeline request is invalid for this video or selected analysis inputs.');
+      }
+
+      if (response.status === 500) {
+        throw new Error('The backend encountered an error while generating the event timeline.');
+      }
+
+      throw new Error(`Timeline generation failed with status ${response.status}. Please try again.`);
+    }
+
+    return (await response.json()) as EventTimelineResponse;
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('A network error occurred while generating the event timeline.');
   }
 }
 

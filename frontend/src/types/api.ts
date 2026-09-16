@@ -138,6 +138,33 @@ export interface SpeechToTextResult {
   processing_time: number;
 }
 
+export interface TimelineRequest {
+  include_visual?: boolean;
+  include_speech?: boolean;
+  include_moderation?: boolean;
+  include_keyframes?: boolean;
+  include_chapters?: boolean;
+}
+
+export interface TimelineEvent {
+  event_id: string;
+  timestamp: number;
+  end_time: number | null;
+  event_type: string;
+  source: string;
+  description: string;
+  confidence: number | null;
+  importance_score: number | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface EventTimelineResponse {
+  video_id: string;
+  total_events: number;
+  events: TimelineEvent[];
+  processing_time: number;
+}
+
 export interface SummarySegment {
   start_time: number;
   end_time: number;

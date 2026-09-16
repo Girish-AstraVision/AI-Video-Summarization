@@ -24,12 +24,6 @@ export type ModerationItem = {
   severity: 'Low' | 'Medium' | 'High';
 };
 
-export type TimelineEvent = {
-  timestamp: string;
-  type: 'Visual' | 'Speech' | 'Key Frame' | 'Moderation' | 'Chapter';
-  description: string;
-};
-
 export type ProcessingStep = {
   name: string;
   status: 'Complete' | 'In Progress' | 'Pending' | 'Failed';
