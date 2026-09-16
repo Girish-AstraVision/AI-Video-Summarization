@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/env';
-import type { ApiHealthResponse, PreprocessingResult, UploadVideoResponse } from '../types/api';
+import type { ApiHealthResponse, PreprocessingResult, UploadVideoResponse, VisualDetectionResult } from '../types/api';
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -105,6 +105,41 @@ export async function preprocessVideo(videoId: string): Promise<PreprocessingRes
     }
 
     throw new Error('A network error occurred while trying to preprocess the video.');
+  }
+}
+
+export async function detectVisualObjects(videoId: string, confidenceThreshold = 0.5): Promise<VisualDetectionResult> {
+  const threshold = Number.isFinite(confidenceThreshold) ? confidenceThreshold : 0.5;
+  const queryParams = new URLSearchParams({ confidence_threshold: String(threshold) });
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/detect?${queryParams.toString()}`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Video "${videoId}" was not found. Please upload it again.`);
+      }
+
+      if (response.status === 400) {
+        throw new Error('The RT-DETR detection request is invalid for this video or threshold.');
+      }
+
+      if (response.status === 500) {
+        throw new Error('The backend encountered an error while running RT-DETR visual analysis.');
+      }
+
+      throw new Error(`Visual detection failed with status ${response.status}. Please try again.`);
+    }
+
+    return (await response.json()) as VisualDetectionResult;
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('A network error occurred while running RT-DETR visual analysis.');
   }
 }
 

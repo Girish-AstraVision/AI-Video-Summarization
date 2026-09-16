@@ -41,4 +41,22 @@ export interface PreprocessingResult {
   details: Record<string, unknown>;
 }
 
+export interface DetectionRecord {
+  frame_number: number;
+  frame_filename: string;
+  timestamp: number;
+  label: string;
+  confidence: number;
+  bounding_box: [number, number, number, number];
+}
+
+export interface VisualDetectionResult {
+  video_id: string;
+  frames_processed: number;
+  number_of_detections: number;
+  detections: DetectionRecord[];
+  processing_time: number;
+  model_name: string;
+}
+
 export type PreprocessingState = 'idle' | 'in-progress' | 'complete' | 'failed';

@@ -11,14 +11,58 @@ import { ChapterList } from './components/chapters/ChapterList';
 import { KeyFrameGallery } from './components/keyframes/KeyFrameGallery';
 import { ModerationPanel } from './components/moderation/ModerationPanel';
 import { EventTimeline } from './components/timeline/EventTimeline';
+import { VisualDetectionPanel } from './components/visual/VisualDetectionPanel';
 import { chapterItems, keyFrameItems, moderationItems, overviewCards, timelineEvents } from './data/mockData';
-import type { PreprocessingResult, PreprocessingState } from './types/api';
+import { detectVisualObjects } from './services/api';
+import type { PreprocessingResult, PreprocessingState, VisualDetectionResult } from './types/api';
 import type { ProcessingStep } from './types/dashboard';
 
 function App() {
   const [videoId, setVideoId] = useState<string | null>(null);
   const [preprocessingState, setPreprocessingState] = useState<PreprocessingState>('idle');
   const [preprocessingResult, setPreprocessingResult] = useState<PreprocessingResult | null>(null);
+  const [visualDetectionState, setVisualDetectionState] = useState<PreprocessingState>('idle');
+  const [visualDetectionResult, setVisualDetectionResult] = useState<VisualDetectionResult | null>(null);
+  const [visualDetectionError, setVisualDetectionError] = useState<string | null>(null);
+  const [seekToTime, setSeekToTime] = useState<number | null>(null);
+
+  const overviewSummary = useMemo(() => {
+    if (visualDetectionState === 'in-progress') {
+      return { value: 'Analyzing...', detail: 'Analyzing...' };
+    }
+
+    if (visualDetectionState === 'complete' && visualDetectionResult) {
+      const uniqueClasses = new Set(visualDetectionResult.detections.map((detection) => detection.label)).size;
+      return {
+        value: String(visualDetectionResult.number_of_detections),
+        detail: `Across ${uniqueClasses} classes`,
+      };
+    }
+
+    if (visualDetectionResult) {
+      const uniqueClasses = new Set(visualDetectionResult.detections.map((detection) => detection.label)).size;
+      return {
+        value: String(visualDetectionResult.number_of_detections),
+        detail: `Across ${uniqueClasses} classes`,
+      };
+    }
+
+    return { value: 'Not analyzed', detail: 'Not analyzed' };
+  }, [visualDetectionResult, visualDetectionState]);
+
+  const overviewItems = useMemo(
+    () => [
+      ...overviewCards.slice(0, 1),
+      {
+        label: 'Detected Objects',
+        value: overviewSummary.value,
+        detail: overviewSummary.detail,
+        tone: 'violet' as const,
+      },
+      ...overviewCards.slice(2),
+    ],
+    [overviewSummary],
+  );
 
   const processingSteps = useMemo<ProcessingStep[]>(() => {
     const uploadValue = videoId ? 100 : 0;
@@ -36,15 +80,51 @@ function App() {
             ? 'Failed'
             : 'Pending';
 
+    const visualAnalysisValue =
+      visualDetectionState === 'in-progress' ? 72 : visualDetectionState === 'complete' ? 100 : visualDetectionState === 'failed' ? 35 : 0;
+
+    const visualAnalysisStatus =
+      visualDetectionState === 'in-progress'
+        ? 'In Progress'
+        : visualDetectionState === 'complete'
+          ? 'Complete'
+          : visualDetectionState === 'failed'
+            ? 'Failed'
+            : 'Pending';
+
     return [
       { name: 'Upload', status: uploadStatus, value: uploadValue },
       { name: 'Preprocessing', status: preprocessingStatus, value: preprocessingValue },
-      { name: 'Visual Analysis', status: 'Pending', value: 0 },
+      { name: 'Visual Analysis', status: visualAnalysisStatus, value: visualAnalysisValue },
       { name: 'Speech Analysis', status: 'Pending', value: 0 },
       { name: 'Summarization', status: 'Pending', value: 0 },
       { name: 'Moderation', status: 'Pending', value: 0 },
     ];
-  }, [preprocessingState, videoId]);
+  }, [preprocessingState, videoId, visualDetectionState]);
+
+  const handleRunVisualAnalysis = async () => {
+    if (!videoId) {
+      setVisualDetectionError('Please upload a video before running visual analysis.');
+      return;
+    }
+
+    setVisualDetectionState('in-progress');
+    setVisualDetectionError(null);
+
+    try {
+      const result = await detectVisualObjects(videoId, 0.5);
+      setVisualDetectionResult(result);
+      setVisualDetectionState('complete');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'RT-DETR visual analysis failed. Please try again.';
+      setVisualDetectionError(message);
+      setVisualDetectionState('failed');
+    }
+  };
+
+  const handleTimestampSeek = (timestamp: number) => {
+    setSeekToTime(timestamp);
+  };
 
   return (
     <div className="app-shell">
@@ -74,15 +154,41 @@ function App() {
           />
 
           <section className="overview-grid" aria-label="Analysis overview cards">
-            {overviewCards.map((item) => (
+            {overviewItems.map((item) => (
               <OverviewCard key={item.label} item={item} />
             ))}
           </section>
 
+          {preprocessingState === 'complete' ? (
+            <section className="panel analysis-controls-panel" aria-label="Visual analysis controls">
+              <div className="analysis-controls-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    void handleRunVisualAnalysis();
+                  }}
+                  disabled={visualDetectionState === 'in-progress'}
+                >
+                  {visualDetectionState === 'in-progress' ? 'Running RT-DETR visual analysis...' : 'Run Visual Analysis'}
+                </button>
+              </div>
+              {visualDetectionError ? <div className="upload-message error-message">{visualDetectionError}</div> : null}
+            </section>
+          ) : null}
+
           <section className="workspace-grid">
-            <VideoWorkspace videoId={videoId} />
+            <VideoWorkspace videoId={videoId} seekToTime={seekToTime} onSeekHandled={() => setSeekToTime(null)} />
             <ProcessingStatus steps={processingSteps} />
           </section>
+
+          {visualDetectionResult ? (
+            <VisualDetectionPanel
+              result={visualDetectionResult}
+              onTimestampClick={handleTimestampSeek}
+              isVisible={visualDetectionState !== 'idle'}
+            />
+          ) : null}
 
           <section className="summary-grid">
             <SummaryPanel />

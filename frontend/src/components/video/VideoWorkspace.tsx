@@ -1,17 +1,31 @@
+import { useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../../config/env';
 
 type VideoWorkspaceProps = {
   videoId: string | null;
+  seekToTime: number | null;
+  onSeekHandled: () => void;
 };
 
-export function VideoWorkspace({ videoId }: VideoWorkspaceProps) {
+export function VideoWorkspace({ videoId, seekToTime, onSeekHandled }: VideoWorkspaceProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoUrl = videoId ? `${API_BASE_URL}/api/videos/${encodeURIComponent(videoId)}/stream` : null;
+
+  useEffect(() => {
+    if (seekToTime === null || videoRef.current === null) {
+      return;
+    }
+
+    videoRef.current.currentTime = seekToTime;
+    onSeekHandled();
+  }, [onSeekHandled, seekToTime]);
 
   return (
     <section className="panel video-panel">
       <div className="video-stage">
         {videoUrl ? (
           <video
+            ref={videoRef}
             className="video-element"
             src={videoUrl}
             controls
